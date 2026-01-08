@@ -1,0 +1,27 @@
+[project]
+name = "evolution-of-todo-monorepo"
+version = "0.1.0"
+description = "Evolution of Todo: Monorepo with multiple phases"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Evolution of Todo", email = "todo@example.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.workspace]
+members = [
+    "phase 1 console App",
+    "phase 2 web App/backend"
+]
