@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
-  let token = request.cookies.get('token')?.value
+  // Check for the token in cookies (first priority)
+  let token = request.cookies.get('authToken')?.value
 
+  // If not in cookies, we could also check for other methods, but typically
+  // for Next.js middleware, cookies are the most reliable way to check auth
   if (!token) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
@@ -12,5 +15,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/tasks/:path*',
+  matcher: ['/tasks(.*)', '/dashboard(.*)'], // Updated to match more protected routes if needed
 }

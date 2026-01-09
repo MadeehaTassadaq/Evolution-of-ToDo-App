@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Task, isTaskCompleted } from '@/types/task';
 import taskService from '@/services/tasks';
+import { isAuthenticated, clearAuth } from '@/lib/auth';
 
 type FilterType = 'all' | 'pending' | 'completed';
 type SortType = 'newest' | 'oldest' | 'name' | 'status';
@@ -18,6 +19,7 @@ export default function DashboardPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [newTask, setNewTask] = useState({ title: '', description: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
   const router = useRouter();
 
   const stats = useMemo(() => {
@@ -60,13 +62,39 @@ export default function DashboardPage() {
   }, [tasks, filter, sort]);
 
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    fetchTasks();
+    let isMounted = true;
+
+    const checkAuthAndLoadTasks = async () => {
+      if (!isMounted) return;
+
+      // Wait for the component to mount before checking auth (SSR-safe)
+      if (typeof window !== 'undefined') {
+        // Check if user is authenticated
+        if (!isAuthenticated()) {
+          // Only redirect to login if not already on login page
+          if (window.location.pathname !== '/login') {
+            router.replace('/login');
+          }
+          return;
+        }
+
+        // If authenticated, proceed to fetch tasks
+        setIsAuthChecked(true);
+        fetchTasks();
+      }
+    };
+
+    // Small delay to ensure component is mounted before checking auth
+    const timer = setTimeout(() => {
+      checkAuthAndLoadTasks();
+    }, 10);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, [router]);
+
 
   const fetchTasks = async () => {
     try {
@@ -137,7 +165,8 @@ export default function DashboardPage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('authToken');
+    // Use auth utility to clear all tokens
+    clearAuth();
     router.push('/login');
   };
 
@@ -153,7 +182,7 @@ export default function DashboardPage() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  if (loading) {
+  if (!isAuthChecked || loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="flex items-center gap-3">
@@ -161,7 +190,7 @@ export default function DashboardPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          <span className="text-gray-400">Loading tasks...</span>
+          <span className="text-gray-400">{!isAuthChecked ? 'Checking authentication...' : 'Loading tasks...'}</span>
         </div>
       </div>
     );

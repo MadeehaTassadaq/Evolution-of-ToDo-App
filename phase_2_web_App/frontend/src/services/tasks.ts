@@ -1,8 +1,6 @@
 import { Task } from '../types/task';
+import { apiFetch, AuthenticationError } from '../lib/api-client';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-// Define the shape of our API responses
 interface ApiResponse<T> {
   data?: T;
   error?: string;
@@ -20,28 +18,14 @@ interface UpdateTaskData {
 }
 
 class TaskService {
-  private getAuthHeaders(): HeadersInit {
-    const token = localStorage.getItem('authToken');
-    return {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` })
-    };
-  }
-
   async getAllTasks(): Promise<ApiResponse<Task[]>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tasks/`, {
-        method: 'GET',
-        headers: this.getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const tasks = await response.json();
+      const tasks = await apiFetch<Task[]>('/api/tasks/', { method: 'GET' });
       return { data: tasks };
     } catch (error) {
+      if (error instanceof AuthenticationError) {
+        return { error: 'Not authenticated' };
+      }
       console.error('Error fetching tasks:', error);
       return { error: error instanceof Error ? error.message : 'Failed to fetch tasks' };
     }
@@ -49,19 +33,15 @@ class TaskService {
 
   async createTask(taskData: CreateTaskData): Promise<ApiResponse<Task>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tasks/`, {
+      const newTask = await apiFetch<Task>('/api/tasks/', {
         method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(taskData),
+        body: JSON.stringify(taskData)
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const newTask = await response.json();
       return { data: newTask };
     } catch (error) {
+      if (error instanceof AuthenticationError) {
+        return { error: 'Not authenticated' };
+      }
       console.error('Error creating task:', error);
       return { error: error instanceof Error ? error.message : 'Failed to create task' };
     }
@@ -69,19 +49,15 @@ class TaskService {
 
   async updateTask(id: string, taskData: UpdateTaskData): Promise<ApiResponse<Task>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tasks/${id}`, {
+      const updatedTask = await apiFetch<Task>(`/api/tasks/${id}`, {
         method: 'PUT',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(taskData),
+        body: JSON.stringify(taskData)
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const updatedTask = await response.json();
       return { data: updatedTask };
     } catch (error) {
+      if (error instanceof AuthenticationError) {
+        return { error: 'Not authenticated' };
+      }
       console.error('Error updating task:', error);
       return { error: error instanceof Error ? error.message : 'Failed to update task' };
     }
@@ -89,17 +65,12 @@ class TaskService {
 
   async deleteTask(id: string): Promise<ApiResponse<null>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tasks/${id}`, {
-        method: 'DELETE',
-        headers: this.getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      await apiFetch<null>(`/api/tasks/${id}`, { method: 'DELETE' });
       return { data: null };
     } catch (error) {
+      if (error instanceof AuthenticationError) {
+        return { error: 'Not authenticated' };
+      }
       console.error('Error deleting task:', error);
       return { error: error instanceof Error ? error.message : 'Failed to delete task' };
     }
@@ -107,18 +78,12 @@ class TaskService {
 
   async toggleTaskCompletion(id: string): Promise<ApiResponse<Task>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tasks/${id}/complete`, {
-        method: 'PATCH',
-        headers: this.getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const updatedTask = await response.json();
+      const updatedTask = await apiFetch<Task>(`/api/tasks/${id}/complete`, { method: 'PATCH' });
       return { data: updatedTask };
     } catch (error) {
+      if (error instanceof AuthenticationError) {
+        return { error: 'Not authenticated' };
+      }
       console.error('Error toggling task completion:', error);
       return { error: error instanceof Error ? error.message : 'Failed to toggle task completion' };
     }
