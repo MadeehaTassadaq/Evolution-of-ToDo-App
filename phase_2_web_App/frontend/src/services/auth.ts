@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export interface RegisterResponse {
   id?: string;
@@ -15,7 +15,7 @@ export interface LoginResponse {
 
 export async function register(email: string, password: string): Promise<RegisterResponse> {
   try {
-    const res = await fetch(`${API_URL}/api/auth/register`, {
+    const res = await fetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }), // Send password, backend will hash it
@@ -40,7 +40,7 @@ export async function login(username: string, password: string): Promise<LoginRe
     formData.append('username', username);
     formData.append('password', password); // Send the plain password, backend will hash it
 
-    const res = await fetch(`${API_URL}/api/auth/token`, {
+    const res = await fetch(`${API_BASE}/api/auth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData.toString(),

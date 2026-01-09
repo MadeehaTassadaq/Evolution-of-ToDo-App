@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { register } from '@/services/auth';
+import { clearAuth } from '@/lib/auth';
 import Link from 'next/link';
 
 export default function RegisterPage() {
@@ -34,6 +35,8 @@ export default function RegisterPage() {
       if (result.error) {
         setError(result.error);
       } else {
+        // Clear any existing tokens before redirecting to login
+        clearAuth();
         router.push('/login');
       }
     } catch (error) {

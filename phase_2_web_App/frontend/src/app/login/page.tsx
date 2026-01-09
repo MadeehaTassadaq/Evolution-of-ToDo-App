@@ -1,9 +1,18 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from '@/services/auth';
+import { isAuthenticated, clearAuth } from '@/lib/auth';
 import Link from 'next/link';
+
+// Import storage function separately since we need to store the token in localStorage
+function storeAuthToken(token: string, userId: string): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('token', token);
+    localStorage.setItem('userId', userId);
+  }
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,6 +20,13 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  // Check if already logged in
+  useEffect(() => {
+    if (typeof window !== 'undefined' && isAuthenticated()) {
+      router.replace('/tasks');
+    }
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,8 +36,11 @@ export default function LoginPage() {
     try {
       const data = await login(email, password);
       if (data.access_token) {
-        localStorage.setItem('authToken', data.access_token);
-        router.push('/tasks');
+        // Use auth utility to store tokens
+        storeAuthToken(data.access_token, data.user_id || '');
+
+        router.replace('/tasks');
+        return; // Ensure no further code runs
       } else if (data.error) {
         setError(data.error);
       } else {

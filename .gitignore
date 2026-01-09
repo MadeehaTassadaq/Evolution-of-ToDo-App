@@ -50,5 +50,12 @@ htmlcov/
 # Logs
 *.log
 
+# Node.js/TypeScript
+node_modules/
+dist/
+*.tsbuildinfo
+.npm
+.yarn
+
 # Project specific
 .specify/memory/session-state.json
