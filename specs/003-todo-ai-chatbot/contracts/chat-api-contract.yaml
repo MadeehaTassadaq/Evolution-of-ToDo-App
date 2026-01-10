@@ -1,0 +1,325 @@
+# API Contract: Todo AI Chatbot Backend
+
+## Overview
+This document specifies the API contracts for the stateless AI chatbot backend that integrates OpenAI Agents SDK with the existing Phase II Todo FastAPI application.
+
+## Base URL
+```
+https://api.example.com  # Replace with actual base URL in production
+```
+
+## Authentication
+All endpoints require Better Auth authentication via Bearer token in the Authorization header:
+```
+Authorization: Bearer <better_auth_token>
+```
+
+## API Endpoints
+
+### 1. Chat Endpoint
+Handles natural language input from users and returns AI-generated responses with potential task operations.
+
+#### Endpoint
+```
+POST /api/{user_id}/chat
+```
+
+#### Parameters
+- **user_id** (path, required): The ID of the user making the request. Must match the authenticated user.
+
+#### Request Headers
+- `Authorization: Bearer <token>` (required)
+- `Content-Type: application/json` (required)
+
+#### Request Body
+```json
+{
+  "message": {
+    "type": "string",
+    "description": "The natural language message from the user",
+    "example": "Add a task to buy groceries tomorrow",
+    "minLength": 1,
+    "maxLength": 1000
+  },
+  "conversation_id": {
+    "type": "string",
+    "description": "Optional ID of an existing conversation. If omitted, a new conversation is created.",
+    "format": "uuid",
+    "example": "123e4567-e89b-12d3-a456-426614174000",
+    "nullable": true
+  }
+}
+```
+
+#### Successful Response (200 OK)
+```json
+{
+  "conversation_id": {
+    "type": "string",
+    "format": "uuid",
+    "description": "The ID of the conversation (newly created or existing)",
+    "example": "123e4567-e89b-12d3-a456-426614174000"
+  },
+  "response": {
+    "type": "string",
+    "description": "The AI-generated response to the user's message",
+    "example": "I've added the task 'buy groceries' for tomorrow."
+  },
+  "tool_calls": {
+    "type": "array",
+    "description": "List of tool calls made by the agent during processing",
+    "items": {
+      "type": "object",
+      "properties": {
+        "tool_name": {
+          "type": "string",
+          "description": "The name of the tool that was called",
+          "example": "add_task"
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Parameters passed to the tool",
+          "example": {
+            "title": "buy groceries",
+            "due_date": "2023-10-15T00:00:00Z"
+          }
+        },
+        "result": {
+          "type": "object",
+          "description": "Result from the tool call",
+          "example": {
+            "success": true,
+            "task": {
+              "id": "task-uuid",
+              "title": "buy groceries",
+              "status": "pending"
+            }
+          }
+        }
+      }
+    }
+  },
+  "timestamp": {
+    "type": "string",
+    "format": "date-time",
+    "description": "When the response was generated",
+    "example": "2023-10-10T12:30:00Z"
+  }
+}
+```
+
+#### Error Responses
+
+##### 400 Bad Request
+```json
+{
+  "detail": {
+    "type": "string",
+    "description": "Error message describing the validation issue",
+    "example": "Message is required and cannot be empty"
+  },
+  "error_code": {
+    "type": "string",
+    "description": "Machine-readable error code",
+    "example": "INVALID_INPUT"
+  }
+}
+```
+
+##### 401 Unauthorized
+```json
+{
+  "detail": "Not authenticated"
+}
+```
+
+##### 403 Forbidden
+```json
+  "detail": "Access denied: user_id does not match authenticated user"
+}
+```
+
+##### 404 Not Found
+```json
+{
+  "detail": {
+    "type": "string",
+    "description": "Error message when conversation is not found",
+    "example": "Conversation not found"
+  }
+}
+```
+
+##### 500 Internal Server Error
+```json
+{
+  "detail": {
+    "type": "string",
+    "description": "Error message for server-side issues",
+    "example": "An unexpected error occurred during chat processing"
+  },
+  "error_code": {
+    "type": "string",
+    "description": "Machine-readable error code",
+    "example": "INTERNAL_ERROR"
+  }
+}
+```
+
+#### Example Request
+```
+POST /api/123e4567-e89b-12d3-a456-426614174000/chat
+Authorization: Bearer <auth_token>
+Content-Type: application/json
+
+{
+  "message": "Add a task to buy groceries tomorrow",
+  "conversation_id": "111e4567-e89b-12d3-a456-426614174111"
+}
+```
+
+#### Example Response
+```json
+{
+  "conversation_id": "111e4567-e89b-12d3-a456-426614174111",
+  "response": "I've added the task 'buy groceries' for tomorrow.",
+  "tool_calls": [
+    {
+      "tool_name": "add_task",
+      "parameters": {
+        "title": "buy groceries",
+        "due_date": "2023-10-11T00:00:00Z"
+      },
+      "result": {
+        "success": true,
+        "task": {
+          "id": "222e4567-e89b-12d3-a456-426614174222",
+          "title": "buy groceries",
+          "status": "pending",
+          "due_date": "2023-10-11T00:00:00Z"
+        }
+      }
+    }
+  ],
+  "timestamp": "2023-10-10T12:30:00Z"
+}
+```
+
+### 2. Get Conversation History
+Retrieves the message history for a specific conversation.
+
+#### Endpoint
+```
+GET /api/{user_id}/conversations/{conversation_id}/messages
+```
+
+#### Parameters
+- **user_id** (path, required): The ID of the user requesting the history. Must match the authenticated user.
+- **conversation_id** (path, required): The ID of the conversation to retrieve history for.
+
+#### Query Parameters
+- **limit** (query, optional): Maximum number of messages to return. Default: 50, Maximum: 100.
+- **offset** (query, optional): Number of messages to skip. Default: 0.
+
+#### Request Headers
+- `Authorization: Bearer <token>` (required)
+
+#### Successful Response (200 OK)
+```json
+{
+  "conversation_id": {
+    "type": "string",
+    "format": "uuid",
+    "example": "111e4567-e89b-12d3-a456-426614174111"
+  },
+  "messages": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "example": "333e4567-e89b-12d3-a456-426614174333"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "assistant", "tool"],
+          "example": "user"
+        },
+        "content": {
+          "type": "string",
+          "example": "Add a task to buy groceries tomorrow"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "example": "2023-10-10T12:25:00Z"
+        },
+        "metadata": {
+          "type": "object",
+          "nullable": true,
+          "example": {
+            "tool_name": "add_task",
+            "result": {"success": true}
+          }
+        }
+      }
+    }
+  },
+  "pagination": {
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "example": 50
+      },
+      "offset": {
+        "type": "integer",
+        "example": 0
+      },
+      "total_count": {
+        "type": "integer",
+        "example": 10
+      },
+      "has_more": {
+        "type": "boolean",
+        "example": false
+      }
+    }
+  }
+}
+```
+
+## Error Handling
+
+### General Error Format
+All error responses follow this structure:
+```json
+{
+  "detail": "Human-readable error message",
+  "error_code": "MACHINE_READABLE_ERROR_CODE",
+  "timestamp": "2023-10-10T12:30:00Z"
+}
+```
+
+### Common Error Codes
+- `INVALID_INPUT`: Request data failed validation
+- `AUTHENTICATION_FAILED`: Authentication token is invalid or missing
+- `AUTHORIZATION_FAILED`: User is not authorized to access the resource
+- `RESOURCE_NOT_FOUND`: Requested resource does not exist
+- `INTERNAL_ERROR`: Server-side error occurred
+- `MCP_TOOL_UNAVAILABLE`: External MCP tool is not accessible
+- `CONVERSATION_LIMIT_EXCEEDED`: Conversation has reached maximum length
+
+## Rate Limiting
+- Requests are limited to 100 per minute per user
+- Exceeding limits results in 429 Too Many Requests response
+- Retry after value provided in response headers
+
+## Security Considerations
+- All requests must be authenticated
+- Users can only access their own conversations
+- Message content is not validated for sensitive information
+- API keys should be rotated regularly
+- HTTPS is required for all requests
