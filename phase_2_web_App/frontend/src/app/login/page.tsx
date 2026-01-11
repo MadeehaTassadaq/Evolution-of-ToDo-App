@@ -30,7 +30,7 @@ export default function LoginPage() {
     if (typeof window !== 'undefined' && isAuthenticated()) {
       router.replace('/tasks');
     }
-  }, [router]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
