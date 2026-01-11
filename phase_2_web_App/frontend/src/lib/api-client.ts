@@ -1,4 +1,4 @@
-import { getToken, clearAuth, isAuthenticated } from './auth';
+import { getToken, clearAuth } from './auth';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -22,12 +22,12 @@ export async function apiFetch<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
+  const token = getToken();
   // Don't make API call if no token is available for authenticated endpoints
-  if (!isAuthenticated()) {
+  if (!token) {
     throw new AuthenticationError('No authentication token found');
   }
 
-  const token = getToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...options.headers,

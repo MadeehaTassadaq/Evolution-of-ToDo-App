@@ -9,8 +9,12 @@ import Link from 'next/link';
 // Import storage function separately since we need to store the token in localStorage
 function storeAuthToken(token: string, userId: string): void {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('token', token);
+    // Store in both localStorage and cookies for consistency with AuthContext
+    localStorage.setItem('authToken', token);
+    document.cookie = `authToken=${token}; path=/; max-age=86400; SameSite=Strict`;
+
     localStorage.setItem('userId', userId);
+    document.cookie = `userId=${userId}; path=/; max-age=86400; SameSite=Strict`;
   }
 }
 
