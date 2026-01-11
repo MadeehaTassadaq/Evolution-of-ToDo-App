@@ -2,7 +2,8 @@ FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PORT=7860
 
 # Set the working directory
 WORKDIR /app
@@ -13,25 +14,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt .
+
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip
-RUN pip install \
-    fastapi==0.109.0 \
-    uvicorn[standard]==0.27.0 \
-    sqlmodel==0.0.16 \
-    pydantic==2.6.0 \
-    psycopg2-binary==2.9.9 \
-    python-jose[cryptography]==3.3.0 \
-    passlib[bcrypt]==1.7.4 \
-    bcrypt==4.1.2 \
-    python-multipart==0.0.6 \
-    python-dotenv==1.0.0
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code
 COPY app/ ./app/
 
 # Expose the port (Hugging Face will set PORT env var)
-EXPOSE 7860
+EXPOSE $PORT
+
+# Create a non-root user for security
+RUN adduser --disabled-password --gecos '' appuser && \
+    chown -R appuser:appuser /app
+USER appuser
 
 # Start the application
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7860}"]
