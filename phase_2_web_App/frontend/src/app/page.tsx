@@ -2,16 +2,35 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Home() {
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    if (token) {
-      router.push('/tasks');
-    } else {
-      router.push('/login');
+    // Wait for auth state to be determined before redirecting
+    if (typeof window !== 'undefined') {
+      // Check if we have an auth token in localStorage or cookies
+      let token = localStorage.getItem('authToken');
+      if (!token) {
+        // Try to get from cookies as fallback
+        const cookieValue = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('authToken='))
+          ?.split('=')[1];
+        if (cookieValue) {
+          token = cookieValue;
+          // Store in localStorage for API calls
+          localStorage.setItem('authToken', cookieValue);
+        }
+      }
+
+      if (token) {
+        router.replace('/tasks');
+      } else {
+        router.replace('/login');
+      }
     }
   }, [router]);
 

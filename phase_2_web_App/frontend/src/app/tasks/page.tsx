@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Task, isTaskCompleted } from '@/types/task';
 import taskService from '@/services/tasks';
-import { isAuthenticated, clearAuth } from '@/lib/auth';
+import { useAuth } from '@/context/AuthContext';
 
 type FilterType = 'all' | 'pending' | 'completed';
 type SortType = 'newest' | 'oldest' | 'name' | 'status';
@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const router = useRouter();
+  const { isAuthenticated } = useAuth(); // Use AuthContext instead of standalone util
 
   const stats = useMemo(() => {
     const completed = tasks.filter(t => isTaskCompleted(t)).length;
@@ -69,8 +70,8 @@ export default function DashboardPage() {
 
       // Wait for the component to mount before checking auth (SSR-safe)
       if (typeof window !== 'undefined') {
-        // Check if user is authenticated
-        if (!isAuthenticated()) {
+        // Check if user is authenticated using AuthContext
+        if (!isAuthenticated) {
           // Only redirect to login if not already on login page
           if (window.location.pathname !== '/login') {
             router.replace('/login');
@@ -93,7 +94,7 @@ export default function DashboardPage() {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [router]);
+  }, [isAuthenticated, router]);
 
 
   const fetchTasks = async () => {
@@ -164,10 +165,11 @@ export default function DashboardPage() {
     }
   };
 
+  const { logout } = useAuth(); // Get logout function from AuthContext
+
   const handleLogout = () => {
-    // Use auth utility to clear all tokens
-    clearAuth();
-    router.push('/login');
+    // Use AuthContext logout function
+    logout();
   };
 
   const formatDate = (dateString: string) => {
