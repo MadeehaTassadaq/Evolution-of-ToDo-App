@@ -94,7 +94,7 @@ export default function DashboardPage() {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated]); // Remove router from dependencies to prevent infinite loop
 
 
   const fetchTasks = async () => {

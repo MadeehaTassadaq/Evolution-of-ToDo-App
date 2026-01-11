@@ -32,7 +32,7 @@ export default function Home() {
         router.replace('/login');
       }
     }
-  }, [router]);
+  }, []); // Run only once on mount
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center">

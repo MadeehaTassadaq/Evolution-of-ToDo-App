@@ -23,9 +23,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = getStoredToken();
     const storedUserId = localStorage.getItem('userId');
 
+    // Only update state if we have a token, otherwise maintain default state (false)
     if (token) {
       setIsAuthenticated(true);
       setUserId(storedUserId);
+    } else {
+      setIsAuthenticated(false);
+      setUserId(null);
     }
   }, []);
 
