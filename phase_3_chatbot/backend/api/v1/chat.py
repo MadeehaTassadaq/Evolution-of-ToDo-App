@@ -3,10 +3,10 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from sqlmodel import Session, func, select
 from database.session import get_session
-from services.chat_service import ChatService
-from agents.todo_agent import TodoAgent
-from models.message import Message
-from services.auth_service import get_current_user
+from backend.services.chat_service import ChatService
+from backend.agents.todo_agent import TodoAgent
+from database.models.message import Message
+from backend.services.auth_service import get_current_user
 import uuid
 from datetime import datetime
 

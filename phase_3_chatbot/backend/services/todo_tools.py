@@ -7,7 +7,7 @@ without MCP server dependencies.
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from database.models.todo import Todo, TodoCreate, TodoUpdate
-from backend.services.todo_service import TodoService
+from .todo_service import TodoService
 
 
 class TodoItem(BaseModel):
