@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import ClientWrapper from './components/ClientWrapper';
+import ClientWrapper from "../components/ClientWrapper";
 import "./globals.css";
 
 const inter = Inter({
@@ -10,12 +10,14 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "TaskFlow - Modern Task Management",
-  description: "A sleek, production-ready task management app with dark theme. Organize your work, boost your productivity.",
+  description:
+    "A sleek, production-ready task management app with dark theme. Organize your work, boost your productivity.",
   keywords: ["todo", "tasks", "productivity", "task management", "dark theme"],
   authors: [{ name: "TaskFlow" }],
   openGraph: {
     title: "TaskFlow - Modern Task Management",
-    description: "A sleek, production-ready task management app with dark theme.",
+    description:
+      "A sleek, production-ready task management app with dark theme.",
     type: "website",
   },
 };
@@ -32,9 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="font-sans antialiased bg-black text-white">
-        <ClientWrapper>
-          {children}
-        </ClientWrapper>
+        <ClientWrapper>{children}</ClientWrapper>
       </body>
     </html>
   );
