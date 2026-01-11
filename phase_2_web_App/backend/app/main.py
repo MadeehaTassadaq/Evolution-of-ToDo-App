@@ -30,7 +30,7 @@ app = FastAPI(title="Evolution of ToDo API", version="1.0.0", lifespan=lifespan)
 # Configure CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://huggingface.co/spaces/madeeha123/chatbot", "https://evolution-of-to-do-app-bafm.vercel.app"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://madeeha123-chatbot.hf.space", "https://evolution-of-to-do-app-bafm.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
