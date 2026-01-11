@@ -18,8 +18,8 @@ engine = create_engine(
 def create_db_and_tables():
     """Create all database tables"""
     # Import models to register them with SQLModel
-    from src.models.user import User
-    from src.models.task import Task
+    from app.models.user import User
+    from app.models.task import Task
     SQLModel.metadata.create_all(engine)
 
 def get_session():
