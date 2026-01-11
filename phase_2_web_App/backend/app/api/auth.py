@@ -6,7 +6,7 @@ from ..models.user import User
 import bcrypt
 from ..middleware.auth import get_current_user
 from jose import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from uuid import UUID
 from dotenv import load_dotenv
@@ -82,7 +82,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), ses
         to_encode = {
             "sub": user.email,
             "user_id": str(user.id),  # Include user ID in token
-            "exp": datetime.utcnow() + access_token_expires
+            "exp": datetime.now(timezone.utc) + access_token_expires
         }
         access_token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
