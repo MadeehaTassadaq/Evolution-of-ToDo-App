@@ -1,8 +1,9 @@
 from sqlmodel import SQLModel, Field, Relationship
-from typing import TYPE_CHECKING, Optional, Dict, Any
+from typing import TYPE_CHECKING, Optional
 from datetime import datetime
 import uuid
 from .base import BaseSQLModel
+from sqlalchemy import JSON
 
 if TYPE_CHECKING:
     from .conversation import Conversation  # For type checking to avoid circular imports
@@ -24,7 +25,6 @@ class Message(MessageBase, table=True):
         index=True,
         nullable=False
     )
-    metadata_: Optional[Dict[str, Any]] = Field(default=None, sa_column_kwargs={"name": "metadata"})  # Using metadata_ to avoid Python keyword
 
     # Relationship to conversation
     conversation: "Conversation" = Relationship(back_populates="messages")
@@ -41,4 +41,4 @@ class MessageRead(MessageBase):
     id: str
     conversation_id: str
     timestamp: datetime
-    metadata_: Optional[Dict[str, Any]] = None
+    metadata_: Optional[dict] = None

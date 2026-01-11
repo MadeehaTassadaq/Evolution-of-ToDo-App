@@ -1,8 +1,12 @@
+import sys
+import os
+# Add the current directory to the path to allow relative imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.router import router
 from dotenv import load_dotenv
-import os
 from security_config import security_config
 
 # Load environment variables

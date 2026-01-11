@@ -1,8 +1,8 @@
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlmodel import Session, select
-from models.conversation import Conversation, ConversationCreate
-from models.message import Message, MessageCreate
+from database.models.conversation import Conversation, ConversationCreate
+from database.models.message import Message, MessageCreate
 from database.session import get_session_context
 import uuid
 

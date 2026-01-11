@@ -63,10 +63,15 @@ def run_migrations_online():
     and associate a connection with the context.
 
     """
+    # Get database URL from environment variable
+    import os
+    database_url = os.getenv('DATABASE_URL', 'sqlite:///./test.db')
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        url=database_url  # Override with environment variable
     )
 
     with connectable.connect() as connection:

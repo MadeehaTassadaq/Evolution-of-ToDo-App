@@ -2,7 +2,7 @@ from typing import Optional, List
 from sqlmodel import Session, select
 from datetime import datetime
 import uuid
-from models.todo import Todo, TodoCreate, TodoUpdate
+from database.models.todo import Todo, TodoCreate, TodoUpdate
 
 
 class TodoService:
