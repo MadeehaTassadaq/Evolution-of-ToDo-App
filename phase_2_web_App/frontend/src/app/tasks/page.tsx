@@ -76,6 +76,7 @@ export default function DashboardPage() {
           if (window.location.pathname !== '/login') {
             router.replace('/login');
           }
+          setIsAuthChecked(true); // Set auth checked to avoid loading spinner
           return;
         }
 

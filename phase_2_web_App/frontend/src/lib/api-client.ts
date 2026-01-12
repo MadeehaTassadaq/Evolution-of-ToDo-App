@@ -1,4 +1,17 @@
-import { getToken, clearAuth } from './auth';
+// We'll update this to use a cookie-based approach
+// Since the AuthContext should handle token management, we'll create a helper function
+function getCookieToken(): string | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const cookieValue = document.cookie
+    .split('; ')
+    .find(row => row.trim().startsWith('authToken='))
+    ?.split('=')[1];
+
+  return cookieValue || null;
+}
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -22,7 +35,12 @@ export async function apiFetch<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getToken();
+  // Try to get token from cookies first, fallback to localStorage
+  let token = getCookieToken();
+  if (!token && typeof window !== 'undefined') {
+    token = localStorage.getItem('authToken');
+  }
+
   // Don't make API call if no token is available for authenticated endpoints
   if (!token) {
     throw new AuthenticationError('No authentication token found');
