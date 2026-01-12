@@ -13,6 +13,21 @@ function getCookieToken(): string | null {
   return cookieValue || null;
 }
 
+// Function to clear auth state
+export function clearAuth(): void {
+  if (typeof document !== 'undefined') {
+    // Clear cookies
+    document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure';
+    document.cookie = 'userId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure';
+  }
+
+  if (typeof window !== 'undefined') {
+    // Clear localStorage
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userId');
+  }
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export class AuthenticationError extends Error {
