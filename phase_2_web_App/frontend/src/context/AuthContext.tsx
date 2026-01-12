@@ -34,30 +34,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getStoredToken = (): string | null => {
-    // Check both localStorage and cookies for token
-    let token = localStorage.getItem('authToken');
-    if (!token) {
-      // Try to get from cookies
-      const cookieValue = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('authToken='))
-        ?.split('=')[1];
-      if (cookieValue) {
-        token = cookieValue;
-        // Store in localStorage for API calls
+    // Prioritize cookies over localStorage for consistency
+    const cookieValue = document.cookie
+      .split('; ')
+      .find(row => row.trim().startsWith('authToken='))
+      ?.split('=')[1];
+
+    if (cookieValue) {
+      // Ensure token is also in localStorage for API calls
+      if (typeof window !== 'undefined') {
         localStorage.setItem('authToken', cookieValue);
       }
+      return cookieValue;
     }
-    return token;
+
+    // Fallback to localStorage if cookies are not available
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('authToken');
+    }
+
+    return null;
   };
 
   const login = (token: string, userId: string) => {
     // Store in both localStorage and cookies
     localStorage.setItem('authToken', token);
-    document.cookie = `authToken=${token}; path=/; max-age=86400; SameSite=Strict`;
+    // For Vercel deployment, use Secure flag if on HTTPS (production)
+    const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    document.cookie = `authToken=${token}; path=/; max-age=86400; SameSite=Lax${isSecure ? '; Secure' : ''}`;
 
     localStorage.setItem('userId', userId);
-    document.cookie = `userId=${userId}; path=/; max-age=86400; SameSite=Strict`;
+    document.cookie = `userId=${userId}; path=/; max-age=86400; SameSite=Lax${isSecure ? '; Secure' : ''}`;
 
     setIsAuthenticated(true);
     setUserId(userId);
@@ -65,8 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     // Clear both localStorage and cookies
-    document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict';
-    document.cookie = 'userId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict';
+    document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure';
+    document.cookie = 'userId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure';
 
     localStorage.removeItem('authToken');
     localStorage.removeItem('userId');

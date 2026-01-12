@@ -3,17 +3,39 @@ import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
   // Check for the token in cookies (first priority)
-  let token = request.cookies.get('authToken')?.value
+  const token = request.cookies.get('authToken')?.value
 
-  // If not in cookies, we could also check for other methods, but typically
-  // for Next.js middleware, cookies are the most reliable way to check auth
-  if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url))
+  // Allow access to login and register pages without token
+  const pathname = request.nextUrl.pathname;
+  if (pathname === '/login' || pathname === '/register') {
+    // If already logged in and trying to access login, redirect to tasks
+    if (token) {
+      return NextResponse.redirect(new URL('/tasks', request.url));
+    }
+    return NextResponse.next();
   }
 
-  return NextResponse.next()
+  // For protected routes, check if token exists
+  if (!token) {
+    // Redirect to login page for protected routes
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/tasks(.*)', '/dashboard(.*)'], // Updated to match more protected routes if needed
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    // Specific protected routes
+    '/tasks(.*)',
+    '/dashboard(.*)',
+  ],
 }
