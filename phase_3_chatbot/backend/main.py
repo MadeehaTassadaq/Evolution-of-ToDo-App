@@ -1,23 +1,55 @@
 import sys
 import os
-# Add the current directory to the path to allow relative imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from contextlib import asynccontextmanager
+
+# Add the src directory to the Python path so imports work correctly
+# This makes 'database', 'services', etc. available as top-level imports
+src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
+sys.path.insert(0, src_dir)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.router import router
+from src.api.router import router
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import sys
+import os
+# Add project root to path for security_config import
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 from security_config import security_config
+from sqlmodel import SQLModel
+from database.session import engine
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # Load environment variables
 load_dotenv()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create database tables on startup."""
+    # Import models to register them with SQLModel metadata
+    from database.models.user import User  # noqa: F401
+    SQLModel.metadata.create_all(engine)
+    yield
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Todo AI Chatbot Backend",
     description="Backend service for Todo AI Chatbot with OpenAI Agents integration",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
+
+# Add rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configure CORS - in production, use specific origins
 frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
