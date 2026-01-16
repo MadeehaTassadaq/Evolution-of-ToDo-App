@@ -1,0 +1,280 @@
+# MCP Tools Contract
+# Defines the tools exposed via Model Context Protocol for task management
+
+mcp_server:
+  name: TodoTools
+  version: 1.0.0
+  description: MCP server exposing task management operations
+
+tools:
+  - name: add_task
+    description: Create a new task for the current user
+    inputSchema:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          description: The title of the task (1-500 characters)
+          minLength: 1
+          maxLength: 500
+        description:
+          type: string
+          description: Optional detailed description of the task
+          maxLength: 5000
+        due_date:
+          type: string
+          format: date-time
+          description: Optional due date for the task (ISO 8601 format)
+    outputSchema:
+      type: object
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+          enum: [pending]
+        created_at:
+          type: string
+          format: date-time
+        message:
+          type: string
+    examples:
+      - input:
+          title: "Buy groceries"
+        output:
+          task_id: "550e8400-e29b-41d4-a716-446655440000"
+          title: "Buy groceries"
+          status: "pending"
+          created_at: "2026-01-14T10:00:00Z"
+          message: "Task 'Buy groceries' created successfully"
+
+  - name: list_tasks
+    description: List all tasks for the current user, optionally filtered by status
+    inputSchema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [all, pending, completed]
+          default: all
+          description: Filter tasks by status
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+          description: Maximum number of tasks to return
+    outputSchema:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            type: object
+            properties:
+              task_id:
+                type: string
+                format: uuid
+              title:
+                type: string
+              status:
+                type: string
+              due_date:
+                type: string
+                format: date-time
+              created_at:
+                type: string
+                format: date-time
+        total_count:
+          type: integer
+        message:
+          type: string
+    examples:
+      - input:
+          status: "pending"
+        output:
+          tasks:
+            - task_id: "550e8400-e29b-41d4-a716-446655440000"
+              title: "Buy groceries"
+              status: "pending"
+              due_date: null
+              created_at: "2026-01-14T10:00:00Z"
+          total_count: 1
+          message: "Found 1 pending task(s)"
+
+  - name: complete_task
+    description: Mark a task as completed
+    inputSchema:
+      type: object
+      required:
+        - task_id
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          description: The ID of the task to complete
+        task_title:
+          type: string
+          description: Alternative - the title of the task to complete (for natural language matching)
+    outputSchema:
+      type: object
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+          enum: [completed]
+        completed_at:
+          type: string
+          format: date-time
+        message:
+          type: string
+    errors:
+      - code: TASK_NOT_FOUND
+        message: No task found with the specified ID or title
+      - code: ALREADY_COMPLETED
+        message: Task is already marked as completed
+    examples:
+      - input:
+          task_title: "Buy groceries"
+        output:
+          task_id: "550e8400-e29b-41d4-a716-446655440000"
+          title: "Buy groceries"
+          status: "completed"
+          completed_at: "2026-01-14T12:00:00Z"
+          message: "Task 'Buy groceries' marked as completed"
+
+  - name: update_task
+    description: Update an existing task's details
+    inputSchema:
+      type: object
+      required:
+        - task_id
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          description: The ID of the task to update
+        task_title:
+          type: string
+          description: Alternative - the current title of the task (for natural language matching)
+        new_title:
+          type: string
+          description: New title for the task
+          minLength: 1
+          maxLength: 500
+        new_description:
+          type: string
+          description: New description for the task
+          maxLength: 5000
+        new_due_date:
+          type: string
+          format: date-time
+          description: New due date for the task
+        new_status:
+          type: string
+          enum: [pending, completed]
+          description: New status for the task
+    outputSchema:
+      type: object
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+        due_date:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        message:
+          type: string
+    errors:
+      - code: TASK_NOT_FOUND
+        message: No task found with the specified ID or title
+      - code: NO_CHANGES
+        message: No changes specified for update
+    examples:
+      - input:
+          task_title: "Buy groceries"
+          new_title: "Buy organic groceries"
+        output:
+          task_id: "550e8400-e29b-41d4-a716-446655440000"
+          title: "Buy organic groceries"
+          status: "pending"
+          due_date: null
+          updated_at: "2026-01-14T11:00:00Z"
+          message: "Task updated successfully"
+
+  - name: delete_task
+    description: Delete a task permanently
+    inputSchema:
+      type: object
+      required:
+        - task_id
+      properties:
+        task_id:
+          type: string
+          format: uuid
+          description: The ID of the task to delete
+        task_title:
+          type: string
+          description: Alternative - the title of the task to delete (for natural language matching)
+        delete_completed:
+          type: boolean
+          default: false
+          description: If true, delete all completed tasks (ignores task_id/task_title)
+    outputSchema:
+      type: object
+      properties:
+        deleted_count:
+          type: integer
+        deleted_tasks:
+          type: array
+          items:
+            type: string
+        message:
+          type: string
+    errors:
+      - code: TASK_NOT_FOUND
+        message: No task found with the specified ID or title
+    examples:
+      - input:
+          task_title: "Buy groceries"
+        output:
+          deleted_count: 1
+          deleted_tasks: ["Buy groceries"]
+          message: "Task 'Buy groceries' deleted successfully"
+      - input:
+          delete_completed: true
+        output:
+          deleted_count: 3
+          deleted_tasks: ["Task 1", "Task 2", "Task 3"]
+          message: "Deleted 3 completed task(s)"
+
+# Context injection
+context:
+  user_id:
+    description: The authenticated user's ID, injected by the ChatKit server
+    source: request_context
+    required: true
+
+# Tool authorization
+authorization:
+  description: All tools require user authentication via JWT token
+  scopes:
+    - tasks:read
+    - tasks:write
+    - tasks:delete

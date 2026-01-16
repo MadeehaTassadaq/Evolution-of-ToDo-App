@@ -226,6 +226,8 @@ If a request conflicts with these rules, stop and ask for clarification.
 ## Active Technologies
 - Python 3.11 + FastAPI, SQLModel, Neon PostgreSQL, OpenAI Agents SDK, Better Auth (003-todo-ai-chatbot)
 - Neon PostgreSQL (via SQLModel) (003-todo-ai-chatbot)
+- Python 3.11 + FastAPI >=0.104.1, openai-chatkit, openai-agents, mcp >=1.25 (004-chatkit-mcp-chatbot)
+- PostgreSQL (Neon) via SQLModel (004-chatkit-mcp-chatbot)
 
 ## Recent Changes
 - 003-todo-ai-chatbot: Added Python 3.11 + FastAPI, SQLModel, Neon PostgreSQL, OpenAI Agents SDK, Better Auth

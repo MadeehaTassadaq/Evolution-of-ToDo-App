@@ -16,7 +16,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await fetch('/api/v1/login', {
+      const response = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -50,7 +50,7 @@ export default function LoginPage() {
 
     try {
       // For demo purposes, register a default user
-      const response = await fetch('/api/v1/register', {
+      const response = await fetch('/api/v1/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +70,7 @@ export default function LoginPage() {
       const data = await response.json();
 
       // Now login with the demo credentials
-      const loginResponse = await fetch('/api/v1/login', {
+      const loginResponse = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

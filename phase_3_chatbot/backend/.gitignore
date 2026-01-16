@@ -1,0 +1,49 @@
+# Virtual environments
+.venv/
+venv/
+venv_test/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files (keep .env.example, exclude .env)
+.env
+
+# Database files
+*.db
+*.sqlite3
+
+# Logs
+*.log
+server.log
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Lock files (keep requirements.txt)
+uv.lock
+
+# Claude
+.claude/

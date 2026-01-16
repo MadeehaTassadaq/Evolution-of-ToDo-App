@@ -1,4 +1,61 @@
-# Phase I Console Todo Application
+# Evolution of Todo - Hugging Face Spaces Deployment
+
+This repository contains the Evolution of Todo application with multiple phases. This document provides information about deploying the web application on Hugging Face Spaces.
+
+## About the Application
+
+This is a full-stack Todo application with:
+
+- **Phase I**: Console-based todo application (Python)
+- **Phase II**: Web application with Next.js frontend and FastAPI backend
+- **Phase III**: AI chatbot integration
+
+## Deploying on Hugging Face Spaces
+
+This repository includes a Dockerfile for deploying the FastAPI backend on Hugging Face Spaces.
+
+### Files for Hugging Face Deployment
+
+- `Dockerfile`: Container configuration for deployment
+- `phase_2_web_App/backend/`: FastAPI backend source code
+- `phase_2_web_App/frontend/`: Next.js frontend (not used in Docker deployment)
+
+### How to Deploy
+
+1. Create a new Space on [Hugging Face](https://huggingface.co/spaces)
+2. Choose "Docker" as the SDK
+3. Use this repository as the source
+4. The Dockerfile will automatically build and deploy the FastAPI backend
+
+### Framework
+
+This Space uses:
+- FastAPI: Modern, fast web framework for building APIs with Python
+- SQLModel: SQL database modeling
+- Uvicorn: ASGI server for running the application
+
+### API Endpoints
+
+Once deployed, the application provides:
+- `/` - Welcome message
+- `/health` - Health check
+- `/api/auth/` - Authentication routes
+- `/api/tasks/` - Task management routes
+
+### Environment Variables
+
+The application supports the following environment variables:
+- `PORT`: Port number to run the application on (defaults to 8000)
+- Database connection variables for Neon PostgreSQL (if configured)
+
+### Hugging Face Spaces Requirements
+
+- Docker SDK selected during Space creation
+- The Dockerfile will automatically handle dependencies
+- Application will run on the port specified by the `PORT` environment variable
+- For database persistence, configure external database services
+
+## Original Phase I Console Todo Application
 
 A feature-rich, in-memory Python console todo application built with Spec-Driven Development principles. This application provides an **interactive menu-driven interface** for intuitive task management with full CRUD operations, organization features, and time-aware task handling.
 
