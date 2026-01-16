@@ -22,7 +22,15 @@ const ChatKitWidget: React.FC = () => {
 
   // Check authentication status on component mount
   useEffect(() => {
-    const token = localStorage.getItem('better-auth-token');
+    // Try multiple possible token storage methods to ensure compatibility
+    const tokenFromLocalStorage = localStorage.getItem('authToken');
+    const tokenFromBetterAuth = localStorage.getItem('better-auth-token');
+    const tokenFromCookies = document.cookie
+      .split('; ')
+      .find(row => row.trim().startsWith('authToken='))
+      ?.split('=')[1];
+
+    const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies;
     setIsAuthenticated(!!token);
   }, []);
 
@@ -51,7 +59,20 @@ const ChatKitWidget: React.FC = () => {
     }
 
     try {
-      const token = localStorage.getItem('better-auth-token');
+      // Try multiple possible token storage methods to ensure compatibility
+      const tokenFromLocalStorage = localStorage.getItem('authToken');
+      const tokenFromBetterAuth = localStorage.getItem('better-auth-token');
+      const tokenFromCookies = document.cookie
+        .split('; ')
+        .find(row => row.trim().startsWith('authToken='))
+        ?.split('=')[1];
+
+      const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies;
+
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
       const apiUrl = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:8001';
       const response = await fetch(`${apiUrl}/api/v1/conversations`, {
         headers: {
@@ -145,7 +166,20 @@ const ChatKitWidget: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const token = localStorage.getItem('better-auth-token');
+      // Try multiple possible token storage methods to ensure compatibility
+      const tokenFromLocalStorage = localStorage.getItem('authToken');
+      const tokenFromBetterAuth = localStorage.getItem('better-auth-token');
+      const tokenFromCookies = document.cookie
+        .split('; ')
+        .find(row => row.trim().startsWith('authToken='))
+        ?.split('=')[1];
+
+      const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies;
+
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
       const apiUrl = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:8001';
       const response = await fetch(`${apiUrl}/api/v1/chat`, {
         method: 'POST',
