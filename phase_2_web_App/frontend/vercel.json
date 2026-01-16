@@ -1,19 +1,5 @@
 {
   "version": 2,
   "name": "taskflow-chatbot",
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next",
-      "config": {
-        "serverless": true
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/"
-    }
-  ]
+  "framework": "nextjs"
 }

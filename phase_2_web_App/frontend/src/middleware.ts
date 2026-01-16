@@ -2,18 +2,32 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
-  // Check for the token in cookies (first priority)
-  const token = request.cookies.get('authToken')?.value
-
-  // Allow access to login and register pages without token
+  // Get the pathname
   const pathname = request.nextUrl.pathname;
-  if (pathname === '/login' || pathname === '/register') {
-    // If already logged in and trying to access login, redirect to tasks
-    if (token) {
-      return NextResponse.redirect(new URL('/tasks', request.url));
-    }
+
+  // Allow access to public assets, API routes, and static files without authentication
+  if (
+    pathname.startsWith('/api/') ||
+    pathname.includes('/_next/') ||
+    pathname.includes('/static/') ||
+    pathname.includes('/public/') ||
+    pathname.endsWith('.ico') ||
+    pathname.endsWith('.png') ||
+    pathname.endsWith('.jpg') ||
+    pathname.endsWith('.jpeg') ||
+    pathname.endsWith('.gif') ||
+    pathname.endsWith('.svg') ||
+    pathname.endsWith('.css') ||
+    pathname.endsWith('.js') ||
+    pathname.endsWith('.map') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register')
+  ) {
     return NextResponse.next();
   }
+
+  // Check for the token in cookies for protected routes
+  const token = request.cookies.get('authToken')?.value
 
   // For protected routes, check if token exists
   if (!token) {
@@ -32,10 +46,11 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - .well-known (security files)
+     * - static (other static files)
+     * - public (public assets)
+     * - assets (asset files)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-    // Specific protected routes
-    '/tasks(.*)',
-    '/dashboard(.*)',
+    '/((?!api|_next/static|_next/image|_next/webpack-hmr|favicon.ico|sitemap.xml|robots.txt).*)',
   ],
 }
