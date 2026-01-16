@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
+// Define a simple ChatKit-like interface since we're connecting to our existing backend
 interface Message {
   id: string;
   text: string;
@@ -15,14 +16,12 @@ const ChatKitWidget: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const pathname = usePathname();
 
-  // Check authentication status on component mount
+  // Check for auth token on component mount
   useEffect(() => {
-    // Try multiple possible token storage methods to ensure compatibility
     const tokenFromLocalStorage = localStorage.getItem('authToken');
     const tokenFromBetterAuth = localStorage.getItem('better-auth-token');
     const tokenFromCookies = document.cookie
@@ -31,128 +30,17 @@ const ChatKitWidget: React.FC = () => {
       ?.split('=')[1];
 
     const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies;
-    setIsAuthenticated(!!token);
+    setAuthToken(token);
+    setIsInitialized(true);
   }, []);
 
-  // Scroll to bottom of messages
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const toggleChat = () => {
-    setIsOpen(!isOpen);
-    if (!isOpen && inputRef.current) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
-    }
-  };
-
-  const loadConversationHistory = useCallback(async () => {
-    if (!isAuthenticated) {
-      setMessages([{ id: 'auth-required', text: 'Please log in to start chatting.', sender: 'system', timestamp: new Date().toISOString() }]);
-      return;
-    }
-
-    try {
-      // Try multiple possible token storage methods to ensure compatibility
-      const tokenFromLocalStorage = localStorage.getItem('authToken');
-      const tokenFromBetterAuth = localStorage.getItem('better-auth-token');
-      const tokenFromCookies = document.cookie
-        .split('; ')
-        .find(row => row.trim().startsWith('authToken='))
-        ?.split('=')[1];
-
-      const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies;
-
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const apiUrl = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:8001';
-      const response = await fetch(`${apiUrl}/api/v1/conversations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.conversations.length > 0) {
-          // Load latest conversation
-          const latestConv = data.conversations[0];
-          const msgResponse = await fetch(`${apiUrl}/api/v1/conversations/${latestConv.id}/messages`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          });
-
-          if (msgResponse.ok) {
-            const msgData = await msgResponse.json();
-            const formattedMessages = msgData.messages.map((msg: any) => ({
-              id: msg.id,
-              text: msg.content,
-              sender: msg.role === 'user' ? 'user' : 'bot',
-              timestamp: msg.timestamp
-            }));
-            setMessages(formattedMessages);
-          }
-        } else {
-          // No conversations yet, show welcome message
-          setMessages([{
-            id: 'welcome',
-            text: 'Hello! I\'m your AI assistant. How can I help you manage your tasks today?',
-            sender: 'bot',
-            timestamp: new Date().toISOString()
-          }]);
-        }
-      } else {
-        // Show welcome message if no conversations
-        setMessages([{
-          id: 'welcome',
-          text: 'Hello! I\'m your AI assistant. How can I help you manage your tasks today?',
-          sender: 'bot',
-          timestamp: new Date().toISOString()
-        }]);
-      }
-    } catch (error) {
-      console.error('Error loading conversation history:', error);
-      setMessages([{
-        id: 'error',
-        text: 'Unable to load conversation history. Starting a new conversation.',
-        sender: 'system',
-        timestamp: new Date().toISOString()
-      }]);
-    }
-  }, [isAuthenticated]);
+  // Don't show the widget on the chatkit page to avoid conflicts
+  if (pathname === '/chatkit' || !isInitialized) {
+    return null;
+  }
 
   const sendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
-
-    if (!isAuthenticated) {
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        text: inputValue,
-        sender: 'user',
-        timestamp: new Date().toISOString()
-      };
-
-      setMessages(prev => [...prev, userMessage]);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        text: 'Please log in to continue chatting with the AI assistant.',
-        sender: 'system',
-        timestamp: new Date().toISOString()
-      }]);
-      setInputValue('');
-      return;
-    }
+    if (!inputValue.trim() || isLoading || !authToken) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -166,26 +54,11 @@ const ChatKitWidget: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Try multiple possible token storage methods to ensure compatibility
-      const tokenFromLocalStorage = localStorage.getItem('authToken');
-      const tokenFromBetterAuth = localStorage.getItem('better-auth-token');
-      const tokenFromCookies = document.cookie
-        .split('; ')
-        .find(row => row.trim().startsWith('authToken='))
-        ?.split('=')[1];
-
-      const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies;
-
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const apiUrl = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:8001';
-      const response = await fetch(`${apiUrl}/api/v1/chat`, {
+      const response = await fetch(process.env.NEXT_PUBLIC_CHATBOT_API_URL + '/api/v1/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           message: inputValue,
@@ -232,24 +105,13 @@ const ChatKitWidget: React.FC = () => {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Escape') {
-      setIsOpen(false);
-    }
-  };
-
-  // Don't show the widget on the chatkit page to avoid conflicts
-  if (pathname === '/chatkit') {
-    return null;
-  }
-
   return (
     <>
       {/* Floating Chat Button */}
-      {!isOpen && (
+      {!isOpen && authToken && (
         <button
-          onClick={toggleChat}
-          className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all z-50"
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-6 right-6 bg-green-500 text-black p-4 rounded-full shadow-lg hover:bg-green-400 transition-all z-50"
           aria-label="Open chat"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -258,54 +120,32 @@ const ChatKitWidget: React.FC = () => {
         </button>
       )}
 
-      {/* Chat Widget */}
-      {isOpen && (
-        <div className="fixed bottom-6 right-6 w-80 h-96 bg-white rounded-lg shadow-xl border border-gray-200 flex flex-col z-50">
+      {/* Chat Widget with black and green theme */}
+      {isOpen && authToken && (
+        <div className="fixed bottom-6 right-6 w-80 h-96 bg-black border border-green-500 rounded-lg shadow-xl flex flex-col z-50">
           {/* Header */}
-          <div className="bg-blue-600 text-white p-3 rounded-t-lg flex justify-between items-center">
+          <div className="bg-green-500 text-black p-3 rounded-t-lg flex justify-between items-center">
             <span className="font-semibold">Todo AI Assistant</span>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => {
-                  setMessages([{
-                    id: 'welcome',
-                    text: 'Hello! I\'m your AI assistant. How can I help you manage your tasks today?',
-                    sender: 'bot',
-                    timestamp: new Date().toISOString()
-                  }]);
-                }}
-                className="text-white hover:text-gray-200 focus:outline-none text-sm"
-                title="New chat"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-              </button>
-              <button
-                onClick={toggleChat}
-                className="text-white hover:text-gray-200 focus:outline-none"
-                title="Close"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-black hover:text-gray-800 focus:outline-none"
+              title="Close"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
           </div>
 
           {/* Messages Container */}
-          <div className="flex-1 overflow-y-auto p-3 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-3 bg-gray-900">
             {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex flex-col items-center justify-center h-full text-green-400 text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                 </svg>
                 <p className="text-center">Start chatting with your AI assistant!</p>
-                {isAuthenticated ? (
-                  <p className="mt-1 text-xs text-center">Ask me to manage your tasks</p>
-                ) : (
-                  <p className="mt-1 text-xs text-center">Log in to unlock full features</p>
-                )}
+                <p className="mt-1 text-xs text-center">Ask me to manage your tasks</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -317,10 +157,10 @@ const ChatKitWidget: React.FC = () => {
                     <div
                       className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
                         message.sender === 'user'
-                          ? 'bg-blue-500 text-white rounded-tr-none'
+                          ? 'bg-green-500 text-black rounded-tr-none'
                           : message.sender === 'system'
                           ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                          : 'bg-gray-200 text-gray-800 rounded-tl-none'
+                          : 'bg-gray-700 text-green-300 rounded-tl-none'
                       }`}
                     >
                       {message.text}
@@ -329,41 +169,38 @@ const ChatKitWidget: React.FC = () => {
                 ))}
                 {isLoading && (
                   <div className="flex justify-start">
-                    <div className="bg-gray-200 text-gray-800 rounded-2xl rounded-tl-none px-4 py-2 text-sm">
+                    <div className="bg-gray-700 text-green-300 rounded-2xl rounded-tl-none px-4 py-2 text-sm">
                       <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
                       </div>
                     </div>
                   </div>
                 )}
-                <div ref={messagesEndRef} />
               </div>
             )}
           </div>
 
           {/* Input Area */}
-          <div className="border-t border-gray-200 p-2 bg-white">
+          <div className="border-t border-green-500 p-2 bg-black">
             <div className="flex">
               <textarea
-                ref={inputRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
-                onKeyDown={handleKeyDown}
-                placeholder={isAuthenticated ? "Ask me to manage your tasks..." : "Log in to chat with AI assistant"}
-                className="flex-1 border border-gray-300 rounded-lg p-2 text-sm resize-none h-12 max-h-32"
+                placeholder="Ask me to manage your tasks..."
+                className="flex-1 bg-gray-800 text-white border border-green-500 rounded-lg p-2 text-sm resize-none h-12 max-h-32"
                 rows={1}
-                disabled={!isAuthenticated || isLoading}
+                disabled={!authToken || isLoading}
               />
               <button
                 onClick={sendMessage}
-                disabled={!inputValue.trim() || isLoading || !isAuthenticated}
-                className={`ml-2 px-4 rounded-lg text-white flex items-center ${
-                  inputValue.trim() && isAuthenticated && !isLoading
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-gray-400 cursor-not-allowed'
+                disabled={!inputValue.trim() || isLoading || !authToken}
+                className={`ml-2 px-4 rounded-lg text-black flex items-center ${
+                  inputValue.trim() && authToken && !isLoading
+                    ? 'bg-green-500 hover:bg-green-400'
+                    : 'bg-gray-600 cursor-not-allowed'
                 }`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -371,13 +208,6 @@ const ChatKitWidget: React.FC = () => {
                 </svg>
               </button>
             </div>
-            {!isAuthenticated && (
-              <div className="text-xs text-center text-gray-500 mt-1">
-                <a href="/login" className="text-blue-600 hover:underline">
-                  Log in to unlock full chat features
-                </a>
-              </div>
-            )}
           </div>
         </div>
       )}
