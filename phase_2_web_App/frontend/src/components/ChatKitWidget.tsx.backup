@@ -22,20 +22,14 @@ const ChatKitWidget: React.FC = () => {
 
   // Check for auth token on component mount
   useEffect(() => {
-    // Try multiple possible token storage methods to ensure compatibility with both web app and chatbot auth systems
     const tokenFromLocalStorage = localStorage.getItem('authToken') ?? null;
     const tokenFromBetterAuth = localStorage.getItem('better-auth-token') ?? null;
     const tokenFromCookies = document.cookie
       .split('; ')
       .find(row => row.trim().startsWith('authToken='))
       ?.split('=')[1] ?? null;
-    const tokenFromBetterAuthCookie = document.cookie
-      .split('; ')
-      .find(row => row.trim().startsWith('better-auth-token='))
-      ?.split('=')[1] ?? null;
 
-    // Try tokens in order of preference
-    const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies || tokenFromBetterAuthCookie;
+    const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies;
 
     setAuthToken(token);
     setIsInitialized(true);
@@ -47,32 +41,7 @@ const ChatKitWidget: React.FC = () => {
   }
 
   const sendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
-
-    // Get the token again to ensure it's fresh - try all possible sources
-    const tokenFromLocalStorage = localStorage.getItem('authToken') ?? null;
-    const tokenFromBetterAuth = localStorage.getItem('better-auth-token') ?? null;
-    const tokenFromCookies = document.cookie
-      .split('; ')
-      .find(row => row.trim().startsWith('authToken='))
-      ?.split('=')[1] ?? null;
-    const tokenFromBetterAuthCookie = document.cookie
-      .split('; ')
-      .find(row => row.trim().startsWith('better-auth-token='))
-      ?.split('=')[1] ?? null;
-
-    const currentToken = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies || tokenFromBetterAuthCookie;
-
-    if (!currentToken) {
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        text: 'Authentication required. Please log in to chat with the AI assistant.',
-        sender: 'system',
-        timestamp: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-      return;
-    }
+    if (!inputValue.trim() || isLoading || !authToken) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -90,7 +59,7 @@ const ChatKitWidget: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentToken}`,
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           message: inputValue,
@@ -107,19 +76,6 @@ const ChatKitWidget: React.FC = () => {
           timestamp: data.timestamp
         };
         setMessages(prev => [...prev, botMessage]);
-      } else if (response.status === 401) {
-        // Handle unauthorized access
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: 'Authentication required. Please log in again.',
-          sender: 'system',
-          timestamp: new Date().toISOString()
-        };
-        setMessages(prev => [...prev, errorMessage]);
-
-        // Clear the token and update state
-        setAuthToken(null);
-        // Don't redirect here since we're in the chat widget
       } else {
         const errorData = await response.json();
         const errorMessage: Message = {
