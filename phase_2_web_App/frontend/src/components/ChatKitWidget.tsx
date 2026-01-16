@@ -29,7 +29,7 @@ const ChatKitWidget: React.FC = () => {
       .find(row => row.trim().startsWith('authToken='))
       ?.split('=')[1];
 
-    const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies;
+    const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies || null;
     setAuthToken(token);
     setIsInitialized(true);
   }, []);
