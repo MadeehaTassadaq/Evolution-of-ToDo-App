@@ -6,7 +6,7 @@ export async function POST(request) {
     const authHeader = request.headers.get('authorization');
 
     // Forward the request to the backend
-    const backendResponse = await fetch('http://localhost:8000/v1/chat', {
+    const backendResponse = await fetch('http://localhost:8001/v1/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

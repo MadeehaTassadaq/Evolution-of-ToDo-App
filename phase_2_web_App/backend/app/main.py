@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
-from .api import auth, tasks
+from .api import auth, tasks, chat
 from .database import create_db_and_tables
 
 # Set up logging
@@ -39,6 +39,7 @@ app.add_middleware(
 # Include routers with /api prefix to match frontend expectations
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(chat.router, prefix="/api", tags=["chat"])
 
 @app.get("/")
 def read_root():

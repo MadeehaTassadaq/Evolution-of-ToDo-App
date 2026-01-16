@@ -1,194 +1,152 @@
-# Quickstart Guide: Todo AI Chatbot Backend
+# Quickstart Guide: Todo AI Chatbot
 
 ## Overview
-This guide provides essential information for developers to quickly understand and begin working on the stateless AI chatbot backend that integrates OpenAI Agents SDK with the existing Phase II Todo FastAPI application.
+This guide provides instructions for setting up and running the Todo AI Chatbot feature. It covers environment setup, dependencies, and initial configuration.
 
 ## Prerequisites
+- Python 3.11 or higher
+- pip package manager
+- uv (Python package manager)
+- Access to OpenAI API (API key)
+- Neon PostgreSQL database instance
 
-### System Requirements
-- Python 3.11+
-- uv package manager
-- PostgreSQL (or Neon PostgreSQL for cloud deployment)
-- OpenAI API key
-- Existing Phase II Todo application backend
+## Environment Setup
 
-### Environment Setup
+### 1. Clone the Repository
 ```bash
-# Clone the repository
-git clone <repo-url>
-cd Evolution-of-ToDo-App
-
-# Navigate to backend directory
-cd backend
-
-# Install dependencies with uv
-uv sync
-
-# Activate the virtual environment
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env to include your OpenAI API key and database connection
+git clone <repository-url>
+cd phase_3_chatbot/backend
 ```
 
-## Key Architecture Components
+### 2. Set up Python Environment
+```bash
+# Install uv if not already installed
+pip install uv
 
-### 1. Conversation Management
-- **Models**: `Conversation` and `Message` models in `src/models/`
-- **Service**: `ChatService` in `src/services/chat_service.py` handles conversation logic
-- **API**: `chat.py` in `src/api/v1/` provides `/api/{user_id}/chat` endpoint
+# Create and activate virtual environment
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
 
-### 2. AI Agent Integration
-- **Agent**: `TodoAgent` in `src/agents/todo_agent.py` orchestrates OpenAI Agent
-- **Tools**: MCP tool interfaces in `src/tools/` connect to external MCP server
+### 3. Install Dependencies
+```bash
+uv pip install -r requirements.txt
+# Or if using pyproject.toml
+uv pip install -e .
+```
 
-### 3. Data Flow
-1. User sends natural language message to `/api/{user_id}/chat`
-2. System fetches conversation history from database
-3. OpenAI Agent processes message with conversation context
-4. Agent calls MCP tools for todo operations if needed
-5. Assistant response is stored in database
-6. Response is returned to user
+## Configuration
+
+### 1. Environment Variables
+Create a `.env` file in the backend directory with the following variables:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+DATABASE_URL=postgresql://username:password@host:port/database_name
+NEON_DATABASE_URL=your_neon_database_connection_string
+JWT_SECRET_KEY=your_jwt_secret_key
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+FRONTEND_ORIGIN=http://localhost:3000
+ENVIRONMENT=development
+```
+
+### 2. Database Setup
+Run the database migrations to create the required tables:
+
+```bash
+python run_migrations.py
+```
+
+Or if using alembic directly:
+
+```bash
+alembic revision --autogenerate -m "Create conversation and message tables"
+alembic upgrade head
+```
 
 ## Running the Application
 
-### Development Mode
+### 1. Start the Backend Server
 ```bash
-# Start the backend server
-cd backend
-uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+# Activate your virtual environment
+source .venv/bin/activate
 
-# The chat endpoint will be available at:
-# POST http://localhost:8000/api/{user_id}/chat
+# Run the FastAPI application
+uvicorn main:app --reload --port 8000
 ```
 
-### Running Tests
+### 2. Verify the Service
+Visit `http://localhost:8000/health` to verify the service is running.
+
+## API Usage
+
+### 1. Authenticate
+First, authenticate using your existing Better Auth session to obtain a JWT token.
+
+### 2. Send a Chat Message
 ```bash
-# Run all tests
-uv run pytest
-
-# Run specific test suites
-uv run pytest tests/unit/
-uv run pytest tests/integration/
+curl -X POST http://localhost:8000/api/v1/chat \
+  -H "Authorization: Bearer <your-jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Add a task to buy groceries tomorrow",
+    "conversation_id": null
+  }'
 ```
 
-## Key Endpoints
-
-### Chat Endpoint
-```
-POST /api/{user_id}/chat
-```
-
-**Headers**:
-- `Authorization: Bearer <token>` (Better Auth token)
-
-**Request Body**:
-```json
-{
-  "message": "Add a task to buy groceries tomorrow",
-  "conversation_id": "optional-uuid-here"
-}
+### 3. Get Conversation History
+```bash
+curl -X GET "http://localhost:8000/api/v1/conversations/<conversation-id>/messages?limit=50&offset=0" \
+  -H "Authorization: Bearer <your-jwt-token>"
 ```
 
-**Response**:
-```json
-{
-  "conversation_id": "uuid-of-conversation",
-  "response": "I've added the task 'buy groceries' for tomorrow.",
-  "tool_calls": [
-    {
-      "tool_name": "add_task",
-      "result": "Task created successfully"
-    }
-  ]
-}
+## Testing
+
+### 1. Run Unit Tests
+```bash
+pytest tests/unit/
 ```
 
-## Development Workflow
-
-### 1. Adding New MCP Tool Integration
-1. Define the tool interface in `src/tools/todo_tools.py`
-2. Update the agent's tool configuration in `src/agents/todo_agent.py`
-3. Ensure the agent never directly modifies database state
-4. Test the integration through the chat endpoint
-
-### 2. Modifying Conversation Logic
-1. Update the `Conversation` or `Message` models as needed
-2. Update the `ChatService` methods to handle new logic
-3. Ensure all changes maintain statelessness
-4. Update relevant tests
-
-### 3. Enhancing Agent Behavior
-1. Modify system prompts in `src/agents/todo_agent.py`
-2. Adjust tool calling behavior as needed
-3. Ensure agent responses are properly persisted
-4. Test with various natural language inputs
-
-## Testing Strategy
-
-### Unit Tests
-- Test individual service methods in isolation
-- Focus on business logic and data validation
-- Located in `backend/tests/unit/`
-
-### Integration Tests
-- Test API endpoints with real database connections
-- Verify end-to-end chat functionality
-- Located in `backend/tests/integration/`
-
-### Contract Tests
-- Verify API contract compliance
-- Test error handling and edge cases
-- Located in `backend/tests/contract/`
-
-## Common Tasks
-
-### Creating a New Conversation
-```python
-from src.services.chat_service import ChatService
-from sqlmodel import Session
-
-# In your service or endpoint
-chat_service = ChatService(session)
-conversation = chat_service.create_conversation(user_id)
+### 2. Run Integration Tests
+```bash
+pytest tests/integration/
 ```
 
-### Processing a Chat Message
-```python
-response = chat_service.process_message(
-    user_id=user_id,
-    message_text="Add a task to buy groceries",
-    conversation_id=conversation_id  # Optional, creates new if not provided
-)
+### 3. Run All Tests
+```bash
+pytest
 ```
 
-### Retrieving Conversation History
-```python
-messages = chat_service.get_conversation_history(
-    conversation_id=conversation_id,
-    limit=50,  # Optional limit
-    offset=0   # Optional offset for pagination
-)
-```
+## Development
+
+### 1. Adding New MCP Tools
+To add new tools for the AI agent:
+
+1. Create the tool function in `mcp_server/tools/todo_tools.py`
+2. Register the tool with the server using the `@server.tool` decorator
+3. Update the agent's tool definitions in `agents/todo_agent.py`
+
+### 2. Data Model Changes
+When modifying data models:
+
+1. Update the model class in `database/models/`
+2. Create a new alembic migration: `alembic revision --autogenerate -m "Description of changes"`
+3. Apply the migration: `alembic upgrade head`
 
 ## Troubleshooting
 
 ### Common Issues
-1. **OpenAI API Errors**: Verify your API key is set in environment variables
-2. **Database Connection**: Ensure PostgreSQL is running and connection string is correct
-3. **Authentication**: Confirm Better Auth tokens are properly configured
-4. **MCP Tools Unavailable**: Check that MCP server is running and accessible
 
-### Debugging the Agent
-- Enable detailed logging in `src/agents/todo_agent.py`
-- Check the message history being passed to the agent
-- Verify tool configurations are correct
-- Monitor tool call execution and responses
+1. **OpenAI API Connection Errors**
+   - Verify your `OPENAI_API_KEY` is set correctly
+   - Check your internet connection
+   - Ensure your OpenAI account is in good standing
 
-## Next Steps
+2. **Database Connection Errors**
+   - Verify your database URL is correct
+   - Check that your database server is running
+   - Ensure your database credentials are valid
 
-1. Review the detailed API contracts in `specs/003-todo-ai-chatbot/contracts/`
-2. Examine the complete data model in `specs/003-todo-ai-chatbot/data-model.md`
-3. Explore the implementation plan in `specs/003-todo-ai-chatbot/plan.md`
-4. Check existing tests for examples of expected behavior
+3. **Authentication Errors**
+   - Verify your JWT token is valid and not expired
+   - Check that you're using the correct authentication headers

@@ -44,7 +44,7 @@ def register_user(user_data: UserRegistration, session: Session = Depends(get_se
         hashed_password = hash_password(user_data.password)
 
         # Create new user with hashed password
-        db_user = User(email=user_data.email, password_hash=hashed_password)
+        db_user = User(email=user_data.email, hashed_password=hashed_password)
 
         session.add(db_user)
         session.commit()
@@ -70,7 +70,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), ses
         user = session.query(User).filter(User.email == form_data.username).first()
 
         # Validate user exists and password is correct
-        if not user or not verify_password(form_data.password, user.password_hash):
+        if not user or not verify_password(form_data.password, user.hashed_password):
             raise HTTPException(
                 status_code=401,
                 detail="Incorrect username or password",
