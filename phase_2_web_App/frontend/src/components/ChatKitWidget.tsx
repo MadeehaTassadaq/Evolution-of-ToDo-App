@@ -22,14 +22,26 @@ const ChatKitWidget: React.FC = () => {
 
   // Check for auth token on component mount
   useEffect(() => {
-    const tokenFromLocalStorage = localStorage.getItem('authToken');
-    const tokenFromBetterAuth = localStorage.getItem('better-auth-token');
-    const tokenFromCookies = document.cookie
-      .split('; ')
-      .find(row => row.trim().startsWith('authToken='))
-      ?.split('=')[1];
+    let token: string | null = null;
 
-    const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies || null;
+    const tokenFromLocalStorage = localStorage.getItem('authToken');
+    if (tokenFromLocalStorage) {
+      token = tokenFromLocalStorage;
+    } else {
+      const tokenFromBetterAuth = localStorage.getItem('better-auth-token');
+      if (tokenFromBetterAuth) {
+        token = tokenFromBetterAuth;
+      } else {
+        const tokenFromCookies = document.cookie
+          .split('; ')
+          .find(row => row.trim().startsWith('authToken='))
+          ?.split('=')[1];
+        if (tokenFromCookies) {
+          token = tokenFromCookies;
+        }
+      }
+    }
+
     setAuthToken(token);
     setIsInitialized(true);
   }, []);
