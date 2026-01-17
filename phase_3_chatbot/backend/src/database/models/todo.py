@@ -1,22 +1,25 @@
 from sqlmodel import SQLModel, Field, create_engine, Session
 from typing import Optional
 from datetime import datetime
+from uuid import UUID, uuid4
 from .base import BaseSQLModel
 
 
 class TodoBase(SQLModel):
     """Base class containing common fields for Todo operations."""
-    title: str = Field(min_length=1, max_length=200)
-    description: Optional[str] = Field(default=None, max_length=1000)
-    status: str = Field(default="pending", max_length=20)  # "pending", "completed"
-    due_date: Optional[str] = Field(default=None, max_length=20)  # ISO format date string
-    user_id: str = Field(max_length=255, index=True)  # References user from authentication system
+    title: str
+    description: Optional[str] = None
+    status: str = "pending"  # "pending", "completed"
+    priority: Optional[str] = None
+    due_date: Optional[datetime] = None  # Use datetime instead of string
+    user_id: UUID  # Use UUID to match the existing task table
 
 
 class Todo(TodoBase, table=True):
     """Todo entity representing a user's task item."""
 
-    id: int = Field(default=None, primary_key=True)
+    __tablename__ = "task"  # Match the existing table name in the database
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -28,14 +31,15 @@ class TodoCreate(TodoBase):
 
 class TodoUpdate(SQLModel):
     """Schema for updating an existing todo."""
-    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
-    description: Optional[str] = Field(default=None, max_length=1000)
-    status: Optional[str] = Field(default=None, max_length=20)  # "pending", "completed"
-    due_date: Optional[str] = Field(default=None, max_length=20)  # ISO format date string
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None  # "pending", "completed"
+    priority: Optional[str] = None
+    due_date: Optional[datetime] = None
 
 
 class TodoRead(TodoBase):
     """Schema for reading todo data."""
-    id: int
+    id: UUID
     created_at: datetime
     updated_at: datetime

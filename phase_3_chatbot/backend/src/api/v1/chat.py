@@ -122,6 +122,43 @@ async def chat_endpoint(
                     "result": {"success": False, "error": str(e)}
                 })
 
+        # If tools were called, generate a human-readable response based on tool results
+        if processed_tool_calls and not response_text:
+            # Format tool results for the AI to summarize
+            tool_results_summary = []
+            for tc in processed_tool_calls:
+                result = tc["result"]
+                if tc["tool_name"] == "list_tasks":
+                    tasks = result.get("tasks", [])
+                    if tasks:
+                        task_lines = []
+                        for task in tasks:
+                            status_icon = "✅" if task.get("status") == "completed" else "📝"
+                            task_lines.append(f"{status_icon} {task.get('title', 'Untitled')}")
+                        response_text = f"Here are your tasks:\n" + "\n".join(task_lines)
+                    else:
+                        response_text = "You don't have any tasks yet. Would you like me to add one?"
+                elif tc["tool_name"] == "add_task":
+                    if result.get("success"):
+                        response_text = f"✅ Task added: {result.get('task', {}).get('title', 'New task')}"
+                    else:
+                        response_text = f"Sorry, I couldn't add the task: {result.get('error', 'Unknown error')}"
+                elif tc["tool_name"] == "complete_task":
+                    if result.get("success"):
+                        response_text = "✅ Task marked as completed!"
+                    else:
+                        response_text = f"Sorry, I couldn't complete the task: {result.get('error', 'Unknown error')}"
+                elif tc["tool_name"] == "delete_task":
+                    if result.get("success"):
+                        response_text = "🗑️ Task deleted successfully."
+                    else:
+                        response_text = f"Sorry, I couldn't delete the task: {result.get('error', 'Unknown error')}"
+                elif tc["tool_name"] == "update_task":
+                    if result.get("success"):
+                        response_text = "✅ Task updated successfully!"
+                    else:
+                        response_text = f"Sorry, I couldn't update the task: {result.get('error', 'Unknown error')}"
+
         # Add assistant response to conversation
         chat_service.add_message_to_conversation(
             conversation_id=conversation.id,
