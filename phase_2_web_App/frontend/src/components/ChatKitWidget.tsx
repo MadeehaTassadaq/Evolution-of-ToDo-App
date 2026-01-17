@@ -18,6 +18,7 @@ const ChatKitWidget: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const pathname = usePathname();
 
   // Helper function to get token from all possible sources
@@ -117,12 +118,18 @@ const ChatKitWidget: React.FC = () => {
         },
         body: JSON.stringify({
           message: inputValue,
-          conversation_id: messages.length > 0 ? messages[0].id : null
+          conversation_id: conversationId
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
+
+        // Store the server's conversation_id for subsequent messages
+        if (data.conversation_id && !conversationId) {
+          setConversationId(data.conversation_id);
+        }
+
         const botMessage: Message = {
           id: (Date.now() + 1).toString(),
           text: data.response,
