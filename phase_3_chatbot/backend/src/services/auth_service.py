@@ -22,8 +22,8 @@ class AuthService:
     """Service class for handling authentication operations."""
 
     def __init__(self):
-        # Get secret key from environment or use a default (not for production!)
-        self.secret_key = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+        # Use BETTER_AUTH_SECRET for compatibility with Phase 2 web app tokens
+        self.secret_key = os.getenv("BETTER_AUTH_SECRET", "your-secret-key-change-in-production")
         self.algorithm = "HS256"
         self.access_token_expire_minutes = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
@@ -62,12 +62,16 @@ class AuthService:
         """
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
-            user_id: str = payload.get("sub")
+
+            # Phase 2 web app tokens have user_id as separate field and email in sub
+            # Phase 3 tokens have user_id in sub
+            user_id: str = payload.get("user_id") or payload.get("sub")
+            username: str = payload.get("username") or payload.get("sub")
 
             if user_id is None:
                 return None
 
-            token_data = TokenData(user_id=user_id)
+            token_data = TokenData(user_id=user_id, username=username)
             return token_data
         except jwt.PyJWTError:
             return None

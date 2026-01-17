@@ -1,7 +1,7 @@
 from typing import Optional, List
 from sqlmodel import Session, select
 from datetime import datetime
-import uuid
+from uuid import UUID
 from database.models.todo import Todo, TodoCreate, TodoUpdate
 
 
@@ -11,12 +11,12 @@ class TodoService:
     def __init__(self, session: Session):
         self.session = session
 
-    def create_todo(self, user_id: str, title: str, description: Optional[str] = None, due_date: Optional[str] = None) -> Todo:
+    def create_todo(self, user_id: UUID, title: str, description: Optional[str] = None, due_date: Optional[str] = None) -> Todo:
         """
         Create a new todo item in the database.
 
         Args:
-            user_id: The ID of the user creating the todo
+            user_id: The ID of the user creating the todo (UUID)
             title: The title of the todo
             description: Optional description
             due_date: Optional due date
@@ -24,11 +24,23 @@ class TodoService:
         Returns:
             The created Todo object
         """
+        # Convert due_date string to datetime if provided
+        from datetime import datetime
+        due_date_obj = None
+        if due_date:
+            try:
+                from datetime import datetime
+                # Parse ISO format date string
+                due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+            except ValueError:
+                # If parsing fails, keep as None
+                due_date_obj = None
+
         todo = Todo(
             user_id=user_id,
             title=title,
             description=description,
-            due_date=due_date,
+            due_date=due_date_obj,
             status="pending"
         )
         self.session.add(todo)
@@ -36,12 +48,12 @@ class TodoService:
         self.session.refresh(todo)
         return todo
 
-    def get_todos_by_user(self, user_id: str, status_filter: Optional[str] = None) -> List[Todo]:
+    def get_todos_by_user(self, user_id: UUID, status_filter: Optional[str] = None) -> List[Todo]:
         """
         Get all todos for a specific user, optionally filtered by status.
 
         Args:
-            user_id: The ID of the user
+            user_id: The ID of the user (UUID)
             status_filter: Optional status filter ("all", "pending", "completed")
 
         Returns:
@@ -55,13 +67,13 @@ class TodoService:
         query = query.order_by(Todo.created_at.desc())
         return self.session.exec(query).all()
 
-    def get_todo_by_id(self, todo_id: int, user_id: str) -> Optional[Todo]:
+    def get_todo_by_id(self, todo_id: UUID, user_id: UUID) -> Optional[Todo]:
         """
         Get a specific todo by ID and verify user ownership.
 
         Args:
-            todo_id: The ID of the todo
-            user_id: The ID of the user
+            todo_id: The ID of the todo (UUID)
+            user_id: The ID of the user (UUID)
 
         Returns:
             Todo object if found and owned by user, None otherwise
@@ -69,13 +81,13 @@ class TodoService:
         statement = select(Todo).where(Todo.id == todo_id, Todo.user_id == user_id)
         return self.session.exec(statement).first()
 
-    def update_todo(self, todo_id: int, user_id: str, update_data: TodoUpdate) -> Optional[Todo]:
+    def update_todo(self, todo_id: UUID, user_id: UUID, update_data: TodoUpdate) -> Optional[Todo]:
         """
         Update a todo item.
 
         Args:
-            todo_id: The ID of the todo to update
-            user_id: The ID of the user
+            todo_id: The ID of the todo to update (UUID)
+            user_id: The ID of the user (UUID)
             update_data: TodoUpdate object with fields to update
 
         Returns:
@@ -86,8 +98,16 @@ class TodoService:
             return None
 
         # Update fields that are provided
-        update_dict = update_data.dict(exclude_unset=True)
+        update_dict = update_data.model_dump(exclude_unset=True)
         for field, value in update_dict.items():
+            if field == "due_date" and value:
+                # Convert due_date string to datetime if provided
+                try:
+                    from datetime import datetime
+                    value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    # If parsing fails, keep the original value
+                    pass
             setattr(todo, field, value)
 
         # Update the updated_at timestamp
@@ -98,13 +118,13 @@ class TodoService:
         self.session.refresh(todo)
         return todo
 
-    def delete_todo(self, todo_id: int, user_id: str) -> bool:
+    def delete_todo(self, todo_id: UUID, user_id: UUID) -> bool:
         """
         Delete a todo item.
 
         Args:
-            todo_id: The ID of the todo to delete
-            user_id: The ID of the user
+            todo_id: The ID of the todo to delete (UUID)
+            user_id: The ID of the user (UUID)
 
         Returns:
             True if deleted successfully, False if not found or not owned by user

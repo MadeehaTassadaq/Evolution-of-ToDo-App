@@ -14,22 +14,27 @@ class TodoAgent:
         # Initialize OpenAI client
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-        # Define the system prompt for the todo agent
-        self.system_prompt = """
-        You are a helpful todo management assistant. Your job is to help users manage their tasks through natural language.
+        # Define the base system prompt for the todo agent
+        self.base_system_prompt = """
+You are a helpful todo management assistant. Your job is to help users manage their tasks through natural language.
 
-        You can help with:
-        - Adding new tasks
-        - Listing existing tasks
-        - Updating task details
-        - Marking tasks as completed
-        - Deleting tasks
+You can help with:
+- Adding new tasks
+- Listing existing tasks (pending, completed, or all)
+- Updating task details
+- Marking tasks as completed
+- Deleting tasks
 
-        When a user requests an action, you should use the appropriate tools to perform the action.
-        Always confirm with the user when performing destructive actions like deleting tasks.
-        If you're unsure about any details, ask the user for clarification.
-        Be friendly and concise in your responses.
-        """
+IMPORTANT: The user is already authenticated. You have their user_id automatically - DO NOT ask the user for their user_id. Just use the tools directly.
+
+When calling tools, the user_id will be automatically filled in for you. Just focus on getting the task details from the user.
+
+When a user requests an action, use the appropriate tools immediately.
+Always confirm with the user when performing destructive actions like deleting tasks.
+Be friendly and concise in your responses.
+
+When listing tasks, format them nicely with status indicators.
+"""
 
     def process_message(
         self,
@@ -49,8 +54,14 @@ class TodoAgent:
             Dictionary containing the agent's response and any tool calls made
         """
         try:
+            # Prepare system prompt with user context
+            system_prompt = f"""{self.base_system_prompt}
+
+Current user_id: {user_id}
+Remember: Use this user_id automatically in all tool calls. Never ask the user for their ID.
+"""
             # Prepare messages for the OpenAI API
-            messages = [{"role": "system", "content": self.system_prompt}]
+            messages = [{"role": "system", "content": system_prompt}]
 
             # Add conversation history
             for msg in conversation_history:

@@ -40,7 +40,19 @@ else:
 
     engine = create_engine(
         processed_database_url,
-        echo=False
+        echo=False,
+        # Connection pool settings for Neon serverless PostgreSQL
+        pool_pre_ping=True,  # Test connections before using them
+        pool_recycle=300,    # Recycle connections after 5 minutes
+        pool_size=5,         # Maintain 5 connections in the pool
+        max_overflow=10,     # Allow up to 10 additional connections
+        connect_args={
+            "connect_timeout": 10,
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
+        }
     )
 
 
