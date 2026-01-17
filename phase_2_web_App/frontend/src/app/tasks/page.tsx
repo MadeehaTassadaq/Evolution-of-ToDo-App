@@ -94,15 +94,34 @@ export default function DashboardPage() {
           if (isMounted) {
             try {
               const response = await taskService.getAllTasks();
-              if (response.data && response.data.length >= 0) { // Handle empty arrays too
-                setTasks(response.data);
+              if (response.data) { // Handle empty arrays too
+                setTasks(prevTasks => {
+                  // Only update if there are actual changes to avoid unnecessary re-renders
+                  const prevTaskIds = new Set(prevTasks.map(task => task.id));
+                  const currTaskIds = new Set(response.data.map(task => task.id));
+
+                  // Check if tasks have changed
+                  const tasksChanged =
+                    prevTasks.length !== response.data.length ||
+                    !prevTasks.every(prevTask => currTaskIds.has(prevTask.id)) ||
+                    !response.data.every(currTask => prevTaskIds.has(currTask.id)) ||
+                    prevTasks.some((prevTask, index) =>
+                      index < response.data.length &&
+                      (prevTask.status !== response.data[index].status ||
+                       prevTask.title !== response.data[index].title));
+
+                  if (tasksChanged) {
+                    return response.data;
+                  }
+                  return prevTasks; // No changes, return same array to avoid re-render
+                });
               }
             } catch (error) {
               console.error('Polling error:', error);
               // Don't stop polling on error, just log it
             }
           }
-        }, 5000); // Poll every 5 seconds
+        }, 3000); // Poll every 3 seconds for faster updates
       }
     };
 
