@@ -59,27 +59,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (token: string, userId: string) => {
     // Store in both localStorage and cookies
     localStorage.setItem('authToken', token);
+    // Also store as better-auth-token for compatibility with Phase 3 chatbot
+    localStorage.setItem('better-auth-token', token);
+
     // For Vercel deployment, use Secure flag if on HTTPS (production)
     const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
     document.cookie = `authToken=${token}; path=/; max-age=86400; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+    document.cookie = `better-auth-token=${token}; path=/; max-age=86400; SameSite=Lax${isSecure ? '; Secure' : ''}`;
 
     localStorage.setItem('userId', userId);
     document.cookie = `userId=${userId}; path=/; max-age=86400; SameSite=Lax${isSecure ? '; Secure' : ''}`;
 
     setIsAuthenticated(true);
     setUserId(userId);
+
+    // Dispatch custom event for ChatKitWidget and other components to react to auth changes
+    window.dispatchEvent(new CustomEvent('authStateChanged', { detail: { isAuthenticated: true, token } }));
   };
 
   const logout = () => {
     // Clear both localStorage and cookies
     document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure';
+    document.cookie = 'better-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure';
     document.cookie = 'userId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure';
 
     localStorage.removeItem('authToken');
+    localStorage.removeItem('better-auth-token');
     localStorage.removeItem('userId');
 
     setIsAuthenticated(false);
     setUserId(null);
+
+    // Dispatch custom event for ChatKitWidget and other components to react to auth changes
+    window.dispatchEvent(new CustomEvent('authStateChanged', { detail: { isAuthenticated: false, token: null } }));
+
     router.push('/login');
   };
 
