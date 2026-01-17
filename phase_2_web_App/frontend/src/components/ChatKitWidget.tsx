@@ -20,9 +20,8 @@ const ChatKitWidget: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const pathname = usePathname();
 
-  // Check for auth token on component mount
-  useEffect(() => {
-    // Try multiple possible token storage methods to ensure compatibility with both web app and chatbot auth systems
+  // Helper function to get token from all possible sources
+  const getTokenFromAllSources = (): string | null => {
     const tokenFromLocalStorage = localStorage.getItem('authToken') ?? null;
     const tokenFromBetterAuth = localStorage.getItem('better-auth-token') ?? null;
     const tokenFromCookies = document.cookie
@@ -35,10 +34,40 @@ const ChatKitWidget: React.FC = () => {
       ?.split('=')[1] ?? null;
 
     // Try tokens in order of preference
-    const token = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies || tokenFromBetterAuthCookie;
+    return tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies || tokenFromBetterAuthCookie;
+  };
 
+  // Check for auth token on component mount and listen for auth changes
+  useEffect(() => {
+    // Initial token check
+    const token = getTokenFromAllSources();
     setAuthToken(token);
     setIsInitialized(true);
+
+    // Listen for auth state changes from AuthContext (same-page auth updates)
+    const handleAuthStateChanged = (event: CustomEvent<{ isAuthenticated: boolean; token: string | null }>) => {
+      if (event.detail.isAuthenticated && event.detail.token) {
+        setAuthToken(event.detail.token);
+      } else {
+        setAuthToken(null);
+      }
+    };
+
+    // Listen for storage changes (cross-tab auth sync)
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'authToken' || event.key === 'better-auth-token') {
+        const newToken = getTokenFromAllSources();
+        setAuthToken(newToken);
+      }
+    };
+
+    window.addEventListener('authStateChanged', handleAuthStateChanged as EventListener);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('authStateChanged', handleAuthStateChanged as EventListener);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   // Don't show the widget on the chatkit page to avoid conflicts
@@ -50,18 +79,12 @@ const ChatKitWidget: React.FC = () => {
     if (!inputValue.trim() || isLoading) return;
 
     // Get the token again to ensure it's fresh - try all possible sources
-    const tokenFromLocalStorage = localStorage.getItem('authToken') ?? null;
-    const tokenFromBetterAuth = localStorage.getItem('better-auth-token') ?? null;
-    const tokenFromCookies = document.cookie
-      .split('; ')
-      .find(row => row.trim().startsWith('authToken='))
-      ?.split('=')[1] ?? null;
-    const tokenFromBetterAuthCookie = document.cookie
-      .split('; ')
-      .find(row => row.trim().startsWith('better-auth-token='))
-      ?.split('=')[1] ?? null;
+    const currentToken = getTokenFromAllSources();
 
-    const currentToken = tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies || tokenFromBetterAuthCookie;
+    // Update authToken state if it was found (in case it was set after initial mount)
+    if (currentToken && !authToken) {
+      setAuthToken(currentToken);
+    }
 
     if (!currentToken) {
       const errorMessage: Message = {
