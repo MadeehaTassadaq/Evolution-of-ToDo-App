@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Task, isTaskCompleted } from '@/types/task';
 import taskService from '@/services/tasks';
@@ -21,7 +21,8 @@ export default function DashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const router = useRouter();
-  const { isAuthenticated } = useAuth(); // Use AuthContext instead of standalone util
+  const { isAuthenticated, userId } = useAuth(); // Use AuthContext instead of standalone util
+  const wsRef = useRef<WebSocket | null>(null);
 
   const stats = useMemo(() => {
     const completed = tasks.filter(t => isTaskCompleted(t)).length;
@@ -83,6 +84,67 @@ export default function DashboardPage() {
         // If authenticated, proceed to fetch tasks
         setIsAuthChecked(true);
         fetchTasks();
+
+        // Set up WebSocket connection for real-time updates
+        if (userId) {
+          const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const wsUrl = `${wsProtocol}//${window.location.host}/api/tasks/ws/${userId}`;
+
+          try {
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+              console.log('Connected to task updates WebSocket');
+            };
+
+            ws.onmessage = (event) => {
+              const data = JSON.parse(event.data);
+              const { action, task } = data;
+
+              setTasks(prevTasks => {
+                let newTasks = [...prevTasks];
+
+                switch (action) {
+                  case 'create':
+                    // Add new task to the beginning of the list
+                    return [task, ...newTasks];
+
+                  case 'update':
+                  case 'complete':
+                    // Update existing task
+                    const taskIndex = newTasks.findIndex(t => t.id === task.id);
+                    if (taskIndex !== -1) {
+                      newTasks[taskIndex] = task;
+                    } else {
+                      // If task doesn't exist, add it (fallback for edge cases)
+                      newTasks = [task, ...newTasks];
+                    }
+                    return newTasks;
+
+                  case 'delete':
+                    // Remove task from list
+                    return newTasks.filter(t => t.id !== task.id);
+
+                  default:
+                    return prevTasks;
+                }
+              });
+            };
+
+            ws.onerror = (error) => {
+              console.error('WebSocket error:', error);
+            };
+
+            ws.onclose = () => {
+              console.log('Disconnected from task updates WebSocket');
+            };
+
+            // Store WebSocket reference
+            wsRef.current = ws;
+          } catch (error) {
+            console.error('Failed to connect to WebSocket:', error);
+          }
+        }
       }
     };
 
@@ -91,11 +153,18 @@ export default function DashboardPage() {
       checkAuthAndLoadTasks();
     }, 10);
 
+    // Cleanup function
     return () => {
       isMounted = false;
       clearTimeout(timer);
+
+      // Close WebSocket connection when component unmounts
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
-  }, [isAuthenticated]); // Remove router from dependencies to prevent infinite loop
+  }, [isAuthenticated, userId]); // Add userId to dependencies to reconnect when user changes
 
 
   const fetchTasks = async () => {
