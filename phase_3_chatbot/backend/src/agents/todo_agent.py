@@ -101,7 +101,7 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
                             "type": "object",
                             "properties": {
                                 "user_id": {"type": "string", "description": "The ID of the user"},
-                                "status_filter": {"type": "string", "enum": ["all", "pending", "completed"], "description": "Filter tasks by status"}
+                                "status_filter": {"type": "string", "enum": ["all", "pending", "completed"], "description": "Filter tasks by status (all, pending, completed)"}
                             },
                             "required": ["user_id"]
                         }
@@ -116,7 +116,7 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
                             "type": "object",
                             "properties": {
                                 "user_id": {"type": "string", "description": "The ID of the user"},
-                                "task_id": {"type": "integer", "description": "The ID of the task to update"},
+                                "task_id": {"type": "string", "description": "The ID of the task to update (UUID format)"},
                                 "title": {"type": "string", "description": "New title for the task"},
                                 "description": {"type": "string", "description": "New description for the task"},
                                 "status": {"type": "string", "enum": ["pending", "completed"], "description": "New status for the task"},
@@ -135,7 +135,7 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
                             "type": "object",
                             "properties": {
                                 "user_id": {"type": "string", "description": "The ID of the user"},
-                                "task_id": {"type": "integer", "description": "The ID of the task to complete"}
+                                "task_id": {"type": "string", "description": "The ID of the task to complete (UUID format)"}
                             },
                             "required": ["user_id", "task_id"]
                         }
@@ -150,7 +150,7 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
                             "type": "object",
                             "properties": {
                                 "user_id": {"type": "string", "description": "The ID of the user"},
-                                "task_id": {"type": "integer", "description": "The ID of the task to delete"}
+                                "task_id": {"type": "string", "description": "The ID of the task to delete (UUID format)"}
                             },
                             "required": ["user_id", "task_id"]
                         }

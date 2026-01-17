@@ -5,10 +5,10 @@ from datetime import datetime
 from typing import Optional, List
 import uuid
 
-from ..models.user import get_current_user
+from ..middleware.auth import get_current_user
 from ..models.user import User
-from ..database import get_db
-from sqlalchemy.orm import Session
+from ..database import get_session
+from sqlmodel import Session
 
 router = APIRouter(prefix="/v1", tags=["chat"])
 security = HTTPBearer()
@@ -43,14 +43,22 @@ messages_db = {}
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    token: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_session)
 ):
     """
     Handle chat requests - in a real implementation, this would connect to the AI agent
     For now, returning mock responses
     """
-    user = get_current_user(token.credentials, db)
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials"
+        )
+
+    # Get user from database using the user_id
+    user = db.get(User, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -105,13 +113,21 @@ async def chat(
 
 @router.get("/conversations", response_model=List[ConversationResponse])
 async def list_conversations(
-    token: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_session)
 ):
     """
     List user's conversations
     """
-    user = get_current_user(token.credentials, db)
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials"
+        )
+
+    # Get user from database using the user_id
+    user = db.get(User, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -136,13 +152,21 @@ async def list_conversations(
 @router.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
 async def get_conversation_messages(
     conversation_id: str,
-    token: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_session)
 ):
     """
     Get messages for a specific conversation
     """
-    user = get_current_user(token.credentials, db)
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials"
+        )
+
+    # Get user from database using the user_id
+    user = db.get(User, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

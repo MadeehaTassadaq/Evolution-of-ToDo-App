@@ -134,13 +134,21 @@ async def chat_endpoint(
                         task_lines = []
                         for task in tasks:
                             status_icon = "✅" if task.get("status") == "completed" else "📝"
-                            task_lines.append(f"{status_icon} {task.get('title', 'Untitled')}")
+                            title = task.get('title', 'Untitled')
+                            description = task.get('description', '')
+                            if description:
+                                task_display = f"{status_icon} {title}: {description}"
+                            else:
+                                task_display = f"{status_icon} {title}"
+                            task_lines.append(task_display)
                         response_text = f"Here are your tasks:\n" + "\n".join(task_lines)
                     else:
                         response_text = "You don't have any tasks yet. Would you like me to add one?"
                 elif tc["tool_name"] == "add_task":
                     if result.get("success"):
-                        response_text = f"✅ Task added: {result.get('task', {}).get('title', 'New task')}"
+                        task = result.get('task', {})
+                        title = task.get('title', 'New task')
+                        response_text = f"✅ Task added: {title}"
                     else:
                         response_text = f"Sorry, I couldn't add the task: {result.get('error', 'Unknown error')}"
                 elif tc["tool_name"] == "complete_task":
