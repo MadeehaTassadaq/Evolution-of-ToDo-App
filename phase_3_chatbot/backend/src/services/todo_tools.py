@@ -41,7 +41,8 @@ class ListTasksParams(BaseModel):
 class UpdateTaskParams(BaseModel):
     """Parameters for update_task tool."""
     user_id: str  # Will be converted to UUID
-    task_id: UUID
+    task_id: Optional[UUID] = None  # Optional - can use task_title instead
+    task_title: Optional[str] = None  # Optional - natural language lookup
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
@@ -52,13 +53,15 @@ class UpdateTaskParams(BaseModel):
 class CompleteTaskParams(BaseModel):
     """Parameters for complete_task tool."""
     user_id: str  # Will be converted to UUID
-    task_id: UUID
+    task_id: Optional[UUID] = None  # Optional - can use task_title instead
+    task_title: Optional[str] = None  # Optional - natural language lookup
 
 
 class DeleteTaskParams(BaseModel):
     """Parameters for delete_task tool."""
     user_id: str  # Will be converted to UUID
-    task_id: UUID
+    task_id: Optional[UUID] = None  # Optional - can use task_title instead
+    task_title: Optional[str] = None  # Optional - natural language lookup
 
 
 class TodoTools:
@@ -199,15 +202,17 @@ class TodoTools:
                 "recoverable": True
             }
 
-    def update_task(self, user_id: str, task_id: UUID, title: Optional[str] = None,
-                   description: Optional[str] = None, status: Optional[str] = None,
-                   priority: Optional[str] = None, due_date: Optional[str] = None) -> Dict[str, Any]:
+    def update_task(self, user_id: str, task_id: UUID = None, task_title: str = None,
+                   title: Optional[str] = None, description: Optional[str] = None,
+                   status: Optional[str] = None, priority: Optional[str] = None,
+                   due_date: Optional[str] = None) -> Dict[str, Any]:
         """
-        Update an existing task.
+        Update an existing task by ID or title.
 
         Args:
             user_id: The ID of the user
-            task_id: The ID of the task to update
+            task_id: The ID of the task to update (optional if task_title provided)
+            task_title: The title of the task to update (for natural language lookup)
             title: New title (optional)
             description: New description (optional)
             status: New status (optional)
@@ -218,22 +223,45 @@ class TodoTools:
             Dictionary with success status and updated task
         """
         try:
+            # Validate that at least one identifier is provided
+            if not task_id and not task_title:
+                return {
+                    "success": False,
+                    "error_code": "VALIDATION_ERROR",
+                    "error_message": "Either task_id or task_title must be provided",
+                    "recoverable": True
+                }
+
             # Convert user_id to UUID format
             user_uuid = self._convert_user_id(user_id)
 
-            # Convert task_id to UUID if it's a string
-            if isinstance(task_id, str):
-                try:
-                    task_uuid = UUID(task_id)
-                except ValueError:
+            task_uuid = None
+
+            # If task_title provided, look up by title first
+            if task_title and not task_id:
+                todo = self.todo_service.get_todo_by_title(task_title, user_uuid)
+                if not todo:
                     return {
                         "success": False,
-                        "error_code": "VALIDATION_ERROR",
-                        "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
+                        "error_code": "TASK_NOT_FOUND",
+                        "error_message": f"No task found matching '{task_title}'",
                         "recoverable": False
                     }
-            else:
-                task_uuid = task_id
+                task_uuid = todo.id
+            elif task_id:
+                # Convert task_id to UUID if it's a string
+                if isinstance(task_id, str):
+                    try:
+                        task_uuid = UUID(task_id)
+                    except ValueError:
+                        return {
+                            "success": False,
+                            "error_code": "VALIDATION_ERROR",
+                            "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
+                            "recoverable": False
+                        }
+                else:
+                    task_uuid = task_id
 
             # Prepare update data
             update_data = TodoUpdate(
@@ -252,10 +280,11 @@ class TodoTools:
             )
 
             if not updated_task:
+                identifier = task_title if task_title else str(task_id)
                 return {
                     "success": False,
                     "error_code": "TASK_NOT_FOUND_OR_PERMISSION_DENIED",
-                    "error_message": f"Task with ID {task_id} not found or you don't have permission to update it",
+                    "error_message": f"Task '{identifier}' not found or you don't have permission to update it",
                     "recoverable": False
                 }
 
@@ -275,7 +304,7 @@ class TodoTools:
             return {
                 "success": True,
                 "task": task_item.model_dump(),
-                "message": f"Task {task_id} updated successfully"
+                "message": f"Task '{updated_task.title}' updated successfully"
             }
 
         except Exception as e:
@@ -286,34 +315,58 @@ class TodoTools:
                 "recoverable": True
             }
 
-    def complete_task(self, user_id: str, task_id: UUID) -> Dict[str, Any]:
+    def complete_task(self, user_id: str, task_id: UUID = None, task_title: str = None) -> Dict[str, Any]:
         """
-        Mark a task as completed.
+        Mark a task as completed by ID or title.
 
         Args:
             user_id: The ID of the user
-            task_id: The ID of the task to mark as completed
+            task_id: The ID of the task to mark as completed (optional if task_title provided)
+            task_title: The title of the task to complete (for natural language lookup)
 
         Returns:
             Dictionary with success status and updated task
         """
         try:
+            # Validate that at least one identifier is provided
+            if not task_id and not task_title:
+                return {
+                    "success": False,
+                    "error_code": "VALIDATION_ERROR",
+                    "error_message": "Either task_id or task_title must be provided",
+                    "recoverable": True
+                }
+
             # Convert user_id to UUID format
             user_uuid = self._convert_user_id(user_id)
 
-            # Convert task_id to UUID if it's a string
-            if isinstance(task_id, str):
-                try:
-                    task_uuid = UUID(task_id)
-                except ValueError:
+            task_uuid = None
+
+            # If task_title provided, look up by title first
+            if task_title and not task_id:
+                todo = self.todo_service.get_todo_by_title(task_title, user_uuid)
+                if not todo:
                     return {
                         "success": False,
-                        "error_code": "VALIDATION_ERROR",
-                        "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
+                        "error_code": "TASK_NOT_FOUND",
+                        "error_message": f"No task found matching '{task_title}'",
                         "recoverable": False
                     }
-            else:
-                task_uuid = task_id
+                task_uuid = todo.id
+            elif task_id:
+                # Convert task_id to UUID if it's a string
+                if isinstance(task_id, str):
+                    try:
+                        task_uuid = UUID(task_id)
+                    except ValueError:
+                        return {
+                            "success": False,
+                            "error_code": "VALIDATION_ERROR",
+                            "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
+                            "recoverable": False
+                        }
+                else:
+                    task_uuid = task_id
 
             # Prepare update data to mark as completed
             update_data = TodoUpdate(status="completed")
@@ -326,10 +379,11 @@ class TodoTools:
             )
 
             if not updated_task:
+                identifier = task_title if task_title else str(task_id)
                 return {
                     "success": False,
                     "error_code": "TASK_NOT_FOUND_OR_PERMISSION_DENIED",
-                    "error_message": f"Task with ID {task_id} not found or you don't have permission to update it",
+                    "error_message": f"Task '{identifier}' not found or you don't have permission to update it",
                     "recoverable": False
                 }
 
@@ -349,7 +403,7 @@ class TodoTools:
             return {
                 "success": True,
                 "task": task_item.model_dump(),
-                "message": f"Task {task_id} marked as completed"
+                "message": f"Task '{updated_task.title}' marked as completed"
             }
 
         except Exception as e:
@@ -360,34 +414,60 @@ class TodoTools:
                 "recoverable": True
             }
 
-    def delete_task(self, user_id: str, task_id: UUID) -> Dict[str, Any]:
+    def delete_task(self, user_id: str, task_id: UUID = None, task_title: str = None) -> Dict[str, Any]:
         """
-        Delete a task.
+        Delete a task by ID or title.
 
         Args:
             user_id: The ID of the user
-            task_id: The ID of the task to delete
+            task_id: The ID of the task to delete (optional if task_title provided)
+            task_title: The title of the task to delete (for natural language lookup)
 
         Returns:
             Dictionary with success status
         """
         try:
+            # Validate that at least one identifier is provided
+            if not task_id and not task_title:
+                return {
+                    "success": False,
+                    "error_code": "VALIDATION_ERROR",
+                    "error_message": "Either task_id or task_title must be provided",
+                    "recoverable": True
+                }
+
             # Convert user_id to UUID format
             user_uuid = self._convert_user_id(user_id)
 
-            # Convert task_id to UUID if it's a string
-            if isinstance(task_id, str):
-                try:
-                    task_uuid = UUID(task_id)
-                except ValueError:
+            task_uuid = None
+            deleted_task_title = task_title  # Store for success message
+
+            # If task_title provided, look up by title first
+            if task_title and not task_id:
+                todo = self.todo_service.get_todo_by_title(task_title, user_uuid)
+                if not todo:
                     return {
                         "success": False,
-                        "error_code": "VALIDATION_ERROR",
-                        "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
+                        "error_code": "TASK_NOT_FOUND",
+                        "error_message": f"No task found matching '{task_title}'",
                         "recoverable": False
                     }
-            else:
-                task_uuid = task_id
+                task_uuid = todo.id
+                deleted_task_title = todo.title
+            elif task_id:
+                # Convert task_id to UUID if it's a string
+                if isinstance(task_id, str):
+                    try:
+                        task_uuid = UUID(task_id)
+                    except ValueError:
+                        return {
+                            "success": False,
+                            "error_code": "VALIDATION_ERROR",
+                            "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
+                            "recoverable": False
+                        }
+                else:
+                    task_uuid = task_id
 
             # Delete the task
             success = self.todo_service.delete_todo(
@@ -396,16 +476,17 @@ class TodoTools:
             )
 
             if not success:
+                identifier = task_title if task_title else str(task_id)
                 return {
                     "success": False,
                     "error_code": "TASK_NOT_FOUND_OR_PERMISSION_DENIED",
-                    "error_message": f"Task with ID {task_id} not found or you don't have permission to delete it",
+                    "error_message": f"Task '{identifier}' not found or you don't have permission to delete it",
                     "recoverable": False
                 }
 
             return {
                 "success": True,
-                "message": f"Task {task_id} deleted successfully"
+                "message": f"Task '{deleted_task_title}' deleted successfully"
             }
 
         except Exception as e:

@@ -1,5 +1,6 @@
 from typing import Optional, List
 from sqlmodel import Session, select
+from sqlalchemy import func
 from datetime import datetime
 from uuid import UUID
 from database.models.todo import Todo, TodoCreate, TodoUpdate
@@ -79,6 +80,34 @@ class TodoService:
             Todo object if found and owned by user, None otherwise
         """
         statement = select(Todo).where(Todo.id == todo_id, Todo.user_id == user_id)
+        return self.session.exec(statement).first()
+
+    def get_todo_by_title(self, title: str, user_id: UUID) -> Optional[Todo]:
+        """
+        Get a specific todo by title and verify user ownership.
+        Uses case-insensitive partial matching for natural language support.
+
+        Args:
+            title: The title of the todo (partial match supported)
+            user_id: The ID of the user (UUID)
+
+        Returns:
+            Todo object if found and owned by user, None otherwise
+        """
+        # First try exact match
+        statement = select(Todo).where(
+            Todo.title == title,
+            Todo.user_id == user_id
+        )
+        result = self.session.exec(statement).first()
+        if result:
+            return result
+
+        # If no exact match, try case-insensitive contains match
+        statement = select(Todo).where(
+            func.lower(Todo.title).contains(title.lower()),
+            Todo.user_id == user_id
+        )
         return self.session.exec(statement).first()
 
     def update_todo(self, todo_id: UUID, user_id: UUID, update_data: TodoUpdate) -> Optional[Todo]:

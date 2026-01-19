@@ -107,7 +107,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             from services.chat_service import ChatService
 
                             # Initialize services
-                            db_session = SessionLocal()
+                            db_session = Session(engine)
                             try:
                                 chat_service = ChatService(db_session)
                                 agent = TodoAgent()
@@ -215,7 +215,7 @@ async def create_thread(
 
     user_id = user_data.get("user_id")
 
-    db = SessionLocal()
+    db = Session(engine)
     try:
         server = TodoChatKitServer(db)
         thread_metadata = await server.create_thread(
@@ -240,7 +240,7 @@ async def list_threads(
 
     user_id = user_data.get("user_id")
 
-    db = SessionLocal()
+    db = Session(engine)
     try:
         server = TodoChatKitServer(db)
         threads = await server.list_threads(user_id=user_id)
@@ -261,7 +261,7 @@ async def get_thread(
         raise HTTPException(status_code=401, detail="Invalid token")
 
     # Verify user has access to this thread
-    db = SessionLocal()
+    db = Session(engine)
     try:
         server = TodoChatKitServer(db)
         thread = await server.get_thread(thread_id)
@@ -286,7 +286,7 @@ async def list_messages(
     if not user_data:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    db = SessionLocal()
+    db = Session(engine)
     try:
         server = TodoChatKitServer(db)
         messages = await server.list_items(thread_id, before=before, limit=limit)

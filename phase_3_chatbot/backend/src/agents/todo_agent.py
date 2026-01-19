@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Dict, Any, List
 from openai import OpenAI
 from pydantic import BaseModel
@@ -111,18 +112,19 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
                     "type": "function",
                     "function": {
                         "name": "update_task",
-                        "description": "Update an existing task",
+                        "description": "Update an existing task. Can identify task by ID or by title (for natural language requests like 'update the groceries task')",
                         "parameters": {
                             "type": "object",
                             "properties": {
                                 "user_id": {"type": "string", "description": "The ID of the user"},
-                                "task_id": {"type": "string", "description": "The ID of the task to update (UUID format)"},
+                                "task_id": {"type": "string", "description": "The ID of the task to update (UUID format). Optional if task_title is provided."},
+                                "task_title": {"type": "string", "description": "The title or partial title of the task to update (for natural language lookup). Use this when the user refers to a task by name."},
                                 "title": {"type": "string", "description": "New title for the task"},
                                 "description": {"type": "string", "description": "New description for the task"},
                                 "status": {"type": "string", "enum": ["pending", "completed"], "description": "New status for the task"},
                                 "due_date": {"type": "string", "description": "New due date in ISO format"}
                             },
-                            "required": ["user_id", "task_id"]
+                            "required": ["user_id"]
                         }
                     }
                 },
@@ -130,14 +132,15 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
                     "type": "function",
                     "function": {
                         "name": "complete_task",
-                        "description": "Mark a task as completed",
+                        "description": "Mark a task as completed. Can identify task by ID or by title (for natural language requests like 'complete the groceries task')",
                         "parameters": {
                             "type": "object",
                             "properties": {
                                 "user_id": {"type": "string", "description": "The ID of the user"},
-                                "task_id": {"type": "string", "description": "The ID of the task to complete (UUID format)"}
+                                "task_id": {"type": "string", "description": "The ID of the task to complete (UUID format). Optional if task_title is provided."},
+                                "task_title": {"type": "string", "description": "The title or partial title of the task to complete (for natural language lookup). Use this when the user refers to a task by name."}
                             },
-                            "required": ["user_id", "task_id"]
+                            "required": ["user_id"]
                         }
                     }
                 },
@@ -145,14 +148,15 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
                     "type": "function",
                     "function": {
                         "name": "delete_task",
-                        "description": "Delete a task",
+                        "description": "Delete a task. Can identify task by ID or by title (for natural language requests like 'delete the groceries task')",
                         "parameters": {
                             "type": "object",
                             "properties": {
                                 "user_id": {"type": "string", "description": "The ID of the user"},
-                                "task_id": {"type": "string", "description": "The ID of the task to delete (UUID format)"}
+                                "task_id": {"type": "string", "description": "The ID of the task to delete (UUID format). Optional if task_title is provided."},
+                                "task_title": {"type": "string", "description": "The title or partial title of the task to delete (for natural language lookup). Use this when the user refers to a task by name."}
                             },
-                            "required": ["user_id", "task_id"]
+                            "required": ["user_id"]
                         }
                     }
                 }
@@ -182,7 +186,7 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
             if tool_calls:
                 for tool_call in tool_calls:
                     function_name = tool_call.function.name
-                    function_args = eval(tool_call.function.arguments)  # Note: In production, use json.loads safely
+                    function_args = json.loads(tool_call.function.arguments)
 
                     # Add user_id to function args if not present
                     if "user_id" not in function_args:
