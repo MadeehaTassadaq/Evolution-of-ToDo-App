@@ -185,8 +185,15 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
             # Process any tool calls
             if tool_calls:
                 for tool_call in tool_calls:
-                    function_name = tool_call.function.name
-                    function_args = json.loads(tool_call.function.arguments)
+                    try:
+                        function_name = tool_call.function.name
+                        function_args = json.loads(tool_call.function.arguments)
+                    except json.JSONDecodeError as e:
+                        return {
+                            "response": f"I'm sorry, there was an error processing your request: {str(e)}",
+                            "tool_calls": [],
+                            "success": False
+                        }
 
                     # Add user_id to function args if not present
                     if "user_id" not in function_args:
