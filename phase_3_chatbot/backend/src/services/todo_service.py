@@ -26,11 +26,9 @@ class TodoService:
             The created Todo object
         """
         # Convert due_date string to datetime if provided
-        from datetime import datetime
         due_date_obj = None
         if due_date:
             try:
-                from datetime import datetime
                 # Parse ISO format date string
                 due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
             except ValueError:
@@ -132,7 +130,6 @@ class TodoService:
             if field == "due_date" and value:
                 # Convert due_date string to datetime if provided
                 try:
-                    from datetime import datetime
                     value = datetime.fromisoformat(value.replace('Z', '+00:00'))
                 except (ValueError, AttributeError):
                     # If parsing fails, keep the original value

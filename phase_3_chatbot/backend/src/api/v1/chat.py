@@ -150,22 +150,24 @@ async def chat_endpoint(
                         title = task.get('title', 'New task')
                         response_text = f"✅ Task added: {title}"
                     else:
-                        response_text = f"Sorry, I couldn't add the task: {result.get('error', 'Unknown error')}"
+                        response_text = f"Sorry, I couldn't add the task: {result.get('error_message', result.get('error', 'Unknown error'))}"
                 elif tc["tool_name"] == "complete_task":
                     if result.get("success"):
-                        response_text = "✅ Task marked as completed!"
+                        task = result.get('task', {})
+                        title = task.get('title', 'the task')
+                        response_text = f"✅ Task '{title}' marked as completed!"
                     else:
-                        response_text = f"Sorry, I couldn't complete the task: {result.get('error', 'Unknown error')}"
+                        response_text = f"Sorry, I couldn't complete the task: {result.get('error_message', result.get('error', 'Unknown error'))}"
                 elif tc["tool_name"] == "delete_task":
                     if result.get("success"):
                         response_text = "🗑️ Task deleted successfully."
                     else:
-                        response_text = f"Sorry, I couldn't delete the task: {result.get('error', 'Unknown error')}"
+                        response_text = f"Sorry, I couldn't delete the task: {result.get('error_message', result.get('error', 'Unknown error'))}"
                 elif tc["tool_name"] == "update_task":
                     if result.get("success"):
                         response_text = "✅ Task updated successfully!"
                     else:
-                        response_text = f"Sorry, I couldn't update the task: {result.get('error', 'Unknown error')}"
+                        response_text = f"Sorry, I couldn't update the task: {result.get('error_message', result.get('error', 'Unknown error'))}"
 
         # Add assistant response to conversation
         chat_service.add_message_to_conversation(
