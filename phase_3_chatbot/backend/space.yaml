@@ -1,0 +1,11 @@
+# Hugging Face Space configuration
+runtime:
+  cpu: 2
+  memory: 8GiB
+  accelerator: null
+  concurrency: 1
+  timeout: 300
+  secrets:
+    - DATABASE_URL
+    - BETTER_AUTH_SECRET
+    - OPENAI_API_KEY

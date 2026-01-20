@@ -148,20 +148,20 @@ class TodoMCPServer:
 
         self.add_tool(
             name="complete_task",
-            description="Mark a task as completed",
+            description="Mark a task as completed. Can identify task by ID or by title (for natural language matching)",
             handler=self.complete_task,
             input_schema={
                 "type": "object",
-                "required": ["task_id"],
+                "required": [],
                 "properties": {
                     "task_id": {
                         "type": "string",
                         "format": "uuid",
-                        "description": "The ID of the task to complete"
+                        "description": "The ID of the task to complete (optional if task_title provided)"
                     },
                     "task_title": {
                         "type": "string",
-                        "description": "Alternative - the title of the task to complete (for natural language matching)"
+                        "description": "The title of the task to complete - use for natural language matching (e.g., 'groceries' will match 'Buy groceries')"
                     }
                 }
             },
@@ -192,20 +192,20 @@ class TodoMCPServer:
 
         self.add_tool(
             name="update_task",
-            description="Update an existing task's details",
+            description="Update an existing task's details. Can identify task by ID or by title (for natural language matching)",
             handler=self.update_task,
             input_schema={
                 "type": "object",
-                "required": ["task_id"],
+                "required": [],
                 "properties": {
                     "task_id": {
                         "type": "string",
                         "format": "uuid",
-                        "description": "The ID of the task to update"
+                        "description": "The ID of the task to update (optional if task_title provided)"
                     },
                     "task_title": {
                         "type": "string",
-                        "description": "Alternative - the current title of the task (for natural language matching)"
+                        "description": "The current title of the task - use for natural language matching (e.g., 'groceries' will match 'Buy groceries')"
                     },
                     "new_title": {
                         "type": "string",
@@ -260,20 +260,20 @@ class TodoMCPServer:
 
         self.add_tool(
             name="delete_task",
-            description="Delete a task permanently",
+            description="Delete a task permanently. Can identify task by ID or by title (for natural language matching)",
             handler=self.delete_task,
             input_schema={
                 "type": "object",
-                "required": ["task_id"],
+                "required": [],
                 "properties": {
                     "task_id": {
                         "type": "string",
                         "format": "uuid",
-                        "description": "The ID of the task to delete"
+                        "description": "The ID of the task to delete (optional if task_title provided)"
                     },
                     "task_title": {
                         "type": "string",
-                        "description": "Alternative - the title of the task to delete (for natural language matching)"
+                        "description": "The title of the task to delete - use for natural language matching (e.g., 'groceries' will match 'Buy groceries')"
                     },
                     "delete_completed": {
                         "type": "boolean",
