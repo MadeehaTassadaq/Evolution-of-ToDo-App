@@ -57,5 +57,12 @@ dist/
 .npm
 .yarn
 
+# Next.js
+.next/
+out/
+next-env.d.ts
+*.hot-update.js
+*.hot-update.json
+
 # Project specific
 .specify/memory/session-state.json
