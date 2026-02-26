@@ -1,0 +1,29 @@
+# ============================================
+# KUBERNETES LEARNING PATH - STEP 8: SERVICE FOR PHASE 2
+# ============================================
+# Service enables frontend to talk to backend pods
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: todo-phase2-backend-service
+spec:
+  type: ClusterIP
+  selector:
+    app: todo-phase2-backend  # Matches deployment labels!
+  ports:
+  - port: 8000                # Service listens on 8000
+    targetPort: 8000           # Forwards to pod containerPort
+    name: http
+
+---
+# NOTES FOR LEARNING:
+# ===================
+# One Service can load balance across multiple Pods!
+# If you have 3 replicas, Service distributes traffic among them.
+#
+# Frontend will call: http://todo-phase2-backend-service:8000
+#
+# Service Discovery: K8s DNS automatically creates:
+# - todo-phase2-backend-service.default.svc.cluster.local
+# - Short name: todo-phase2-backend-service (works in same namespace)

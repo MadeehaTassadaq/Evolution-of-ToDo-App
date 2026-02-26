@@ -1,0 +1,62 @@
+# ============================================
+# KUBERNETES LEARNING PATH - STEP 7: DEPLOYMENT (SCALING!)
+# ============================================
+# A Deployment provides:
+# 1. Self-healing: Restarts pods if they crash
+# 2. Scaling: Run multiple copies (replicas)
+# 3. Rolling updates: Update without downtime
+# 4. Rollback: Undo bad updates
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-phase2-backend-deployment
+  labels:
+    app: todo-phase2-backend
+spec:
+  replicas: 3  # Run 3 copies for scaling!
+  selector:
+    matchLabels:
+      app: todo-phase2-backend
+  template:
+    # This template is like a Pod spec!
+    metadata:
+      labels:
+        app: todo-phase2-backend
+    spec:
+      containers:
+      - name: backend
+        image: madeeha456/todo-backend-phase2:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: todo-secrets
+              key: database-url
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+# NOTES FOR LEARNING:
+# ===================
+# Pod vs Deployment:
+# - Pod: Single instance, no self-healing, manual scaling
+# - Deployment: Manages multiple pods, auto-restart, easy scaling
+#
+# Key fields:
+# - replicas: How many pod copies to run
+# - selector: Finds pods to manage (must match template labels!)
+# - template: Pod template (metadata.labels + spec)
+#
+# Scaling commands:
+#   kubectl scale deployment todo-phase2-backend-deployment --replicas=5
+#   kubectl autoscale deployment todo-phase2-backend-deployment --min=2 --max=10

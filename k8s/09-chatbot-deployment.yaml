@@ -1,0 +1,131 @@
+# ============================================
+# KUBERNETES LEARNING PATH - STEP 9: CHATBOT DEPLOYMENT
+# ============================================
+# Phase 3 Chatbot Backend Deployment
+# Provides:
+# 1. Self-healing: Restarts pods if they crash
+# 2. Scaling: Run multiple copies (replicas)
+# 3. Rolling updates: Update without downtime
+# 4. Zero-downtime deployments
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-chatbot-deployment
+  labels:
+    app: todo-chatbot
+spec:
+  replicas: 2  # Run 2 copies for chatbot availability
+  selector:
+    matchLabels:
+      app: todo-chatbot
+  template:
+    metadata:
+      labels:
+        app: todo-chatbot
+    spec:
+      containers:
+      - name: chatbot
+        image: madeeha456/todo-chatbot:latest
+        imagePullPolicy: Never  # Use local image
+        ports:
+        - containerPort: 7860
+          name: http
+        env:
+        # Database connection (Neon PostgreSQL)
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: todo-secrets
+              key: database-url
+
+        # JWT Secret (for verifying Better Auth tokens)
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: todo-secrets
+              key: jwt-secret-key
+
+        # Better Auth Secret (same as JWT_SECRET_KEY)
+        - name: BETTER_AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: todo-secrets
+              key: better-auth-secret
+
+        # OpenAI API Key
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: todo-secrets
+              key: openai-api-key
+
+        # Frontend Origin for CORS
+        - name: FRONTEND_ORIGIN
+          value: "http://localhost:3000"
+
+        # Environment
+        - name: ENVIRONMENT
+          value: "development"
+
+        # Backend Port
+        - name: PORT
+          value: "7860"
+
+        # OpenAI ChatKit Domain Key
+        - name: OPENAI_CHATKIT_DOMAIN_KEY
+          valueFrom:
+            secretKeyRef:
+              name: todo-secrets
+              key: openai-chatkit-domain-key
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        # Readiness probe (only receive traffic when ready)
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 7860
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+        # Liveness probe (restart if unhealthy)
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 7860
+          initialDelaySeconds: 30
+          periodSeconds: 10
+
+---
+# NOTES FOR LEARNING:
+# ===================
+# Chatbot-specific configurations:
+#
+# 1. Replicas: 2 copies for chatbot availability
+#    - Chatbots are stateless, so scaling is easy
+#    - Multiple replicas handle more concurrent users
+#
+# 2. Environment Variables:
+#    - DATABASE_URL: Connect to same Neon DB as Phase 2
+#    - JWT_SECRET_KEY: Verify tokens from Better Auth
+#    - OPENAI_API_KEY: For OpenAI Agents SDK
+#
+# 3. Health Probes:
+#    - Readiness: Pod is ready to receive traffic
+#    - Liveness: Restart pod if it's stuck
+#
+# 4. Resource Limits:
+#    - Chatbots with AI can be CPU/memory intensive
+#    - Set appropriate limits for your hardware
+#
+# Commands:
+#   kubectl apply -f 09-chatbot-deployment.yaml
+#   kubectl get pods -l app=todo-chatbot
+#   kubectl logs deployment/todo-chatbot-deployment

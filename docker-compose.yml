@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Phase II Backend - FastAPI Todo CRUD
+  backend:
+    build:
+      context: ./phase_2_web_App/backend
+      dockerfile: Dockerfile
+    container_name: todo-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - PORT=8000
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - todo-network
+
+  # Phase III Backend - Chatbot with AI
+  chatbot:
+    build:
+      context: ./phase_3_chatbot/backend
+      dockerfile: Dockerfile
+    container_name: todo-chatbot
+    ports:
+      - "7860:7860"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - FRONTEND_ORIGIN=http://localhost:3000
+      - PORT=7860
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - todo-network
+
+  # Frontend - Next.js with Chat Widget
+  frontend:
+    build:
+      context: ./phase_2_web_App/frontend
+      dockerfile: Dockerfile
+    container_name: todo-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_CHATBOT_API_URL=http://localhost:7860
+      - NEXT_PUBLIC_BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - chatbot
+    networks:
+      - todo-network
+
+networks:
+  todo-network:
+    driver: bridge
+
+volumes:
+  postgres-data:

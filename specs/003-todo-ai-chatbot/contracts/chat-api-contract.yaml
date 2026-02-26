@@ -1,0 +1,203 @@
+openapi: 3.0.0
+info:
+  title: Todo AI Chatbot API
+  description: API specification for the Todo AI Chatbot feature
+  version: 1.0.0
+paths:
+  /v1/chat:
+    post:
+      summary: Process a chat message with the AI todo assistant
+      description: |
+        Sends a natural language message to the AI chatbot and receives a response.
+        The AI may perform todo operations using tools as needed.
+      operationId: processChatMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+                  description: The user's message to the chatbot
+                  example: "Add a task to buy groceries tomorrow"
+                conversation_id:
+                  type: string
+                  description: Optional ID of an existing conversation
+                  example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Successful response from the chatbot
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - conversation_id
+                  - response
+                  - tool_calls
+                  - timestamp
+                properties:
+                  conversation_id:
+                    type: string
+                    description: ID of the conversation (new or existing)
+                    example: "123e4567-e89b-12d3-a456-426614174000"
+                  response:
+                    type: string
+                    description: The chatbot's response to the user
+                    example: "I've added the task 'Buy groceries' to your list."
+                  tool_calls:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        tool_name:
+                          type: string
+                          description: Name of the tool that was called
+                          example: "add_task"
+                        parameters:
+                          type: object
+                          description: Parameters passed to the tool
+                        result:
+                          type: object
+                          description: Result from the tool execution
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: ISO timestamp of the response
+                    example: "2026-01-13T10:30:00Z"
+        '400':
+          description: Bad request - invalid input
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "Invalid request parameters"
+        '401':
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "Could not validate credentials"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "An error occurred processing your request"
+      security:
+        - bearerAuth: []
+  /v1/conversations/{conversation_id}/messages:
+    get:
+      summary: Get message history for a conversation
+      description: Retrieve the message history for a specific conversation with pagination
+      operationId: getConversationMessages
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID of the conversation
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Maximum number of messages to return (max 100)
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of messages to skip
+      responses:
+        '200':
+          description: List of messages in the conversation
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - conversation_id
+                  - messages
+                  - pagination
+                properties:
+                  conversation_id:
+                    type: string
+                    description: ID of the conversation
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                        - role
+                        - content
+                        - timestamp
+                      properties:
+                        id:
+                          type: string
+                          description: Unique ID of the message
+                        role:
+                          type: string
+                          enum: [user, assistant, tool]
+                          description: Role of the message sender
+                        content:
+                          type: string
+                          description: Content of the message
+                        timestamp:
+                          type: string
+                          format: date-time
+                          description: ISO timestamp of the message
+                        metadata:
+                          type: object
+                          description: Optional metadata for the message
+                  pagination:
+                    type: object
+                    properties:
+                      limit:
+                        type: integer
+                        description: Number of messages requested
+                      offset:
+                        type: integer
+                        description: Number of messages skipped
+                      total_count:
+                        type: integer
+                        description: Total number of messages in the conversation
+                      has_more:
+                        type: boolean
+                        description: Whether there are more messages available
+        '401':
+          description: Unauthorized - invalid or missing authentication
+        '403':
+          description: Forbidden - user doesn't have access to this conversation
+        '404':
+          description: Conversation not found
+        '500':
+          description: Internal server error
+      security:
+        - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
