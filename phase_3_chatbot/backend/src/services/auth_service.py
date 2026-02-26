@@ -66,14 +66,19 @@ class AuthService:
             # Phase 2 web app tokens have user_id as separate field and email in sub
             # Phase 3 tokens have user_id in sub
             user_id: str = payload.get("user_id") or payload.get("sub")
-            username: str = payload.get("username") or payload.get("sub")
+
+            # Only use sub as username fallback if it's an email (contains @)
+            sub = payload.get("sub", "")
+            username: str = payload.get("username") or (sub if "@" in sub else user_id)
 
             if user_id is None:
                 return None
 
             token_data = TokenData(user_id=user_id, username=username)
             return token_data
-        except jwt.PyJWTError:
+        except Exception as e:
+            # Log error for debugging
+            print(f"Token verification error: {e}")
             return None
 
     async def get_current_user(self, credentials: HTTPAuthorizationCredentials = Depends(security)):

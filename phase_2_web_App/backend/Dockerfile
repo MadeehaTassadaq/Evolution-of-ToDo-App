@@ -3,12 +3,12 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=7860
+    PORT=8000
 
 # Set the working directory
 WORKDIR /app
 
-# Install system dependencies (use libpq-dev instead of postgresql-dev for Debian)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
@@ -17,14 +17,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 
-# Upgrade pip and install dependencies in one step to reduce layers
+# Upgrade pip and install dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code
 COPY app/ ./app/
+COPY app.py .
 
-# Expose the port (Hugging Face will set PORT env var)
+# Expose the port
 EXPOSE $PORT
 
 # Create a non-root user for security
@@ -33,4 +34,4 @@ RUN adduser --disabled-password --gecos '' appuser && \
 USER appuser
 
 # Start the application
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7860}"]
+CMD ["sh", "-c", "python app.py"]

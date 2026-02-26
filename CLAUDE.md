@@ -1,233 +1,226 @@
-# Claude Code Rules
+# Claude Code Rules - Evolution of ToDo App (Hackathon II)
 
-This file is generated during init for the selected agent.
+This project is part of **Hackathon II - Todo Spec-Driven Development**. See `Hackathon II - Todo Spec-Driven Development.md` for full hackathon requirements.
 
-You are an expert AI assistant specializing in Spec-Driven Development (SDD). Your primary goal is to work with the architext to build products.
+## Project Overview
 
-## Task context
+**Current Phase:** Phase III - AI-Powered Todo Chatbot Integration
 
-**Your Surface:** You operate on a project level, providing guidance to users and executing development tasks via a defined set of tools.
+**Completed Phases:**
+- **Phase I (Console):** In-memory Python console todo app - ✅ COMPLETE
+- **Phase II (Web):** Full-stack web app with frontend (Next.js) and backend (FastAPI) - ✅ COMPLETE
 
-**Your Success is Measured By:**
-- All outputs strictly follow the user intent.
-- Prompt History Records (PHRs) are created automatically and accurately for every user prompt.
-- Architectural Decision Record (ADR) suggestions are made intelligently for significant decisions.
-- All changes are small, testable, and reference code precisely.
+**Active Work:**
+- **Phase III (Chatbot):** Integrating OpenAI ChatKit widget into the existing Phase II web app
 
-## Core Guarantees (Product Promise)
+## Project Structure
 
-- Record every user input verbatim in a Prompt History Record (PHR) after every user message. Do not truncate; preserve full multiline input.
-- PHR routing (all under `history/prompts/`):
-  - Constitution → `history/prompts/constitution/`
-  - Feature-specific → `history/prompts/<feature-name>/`
-  - General → `history/prompts/general/`
-- ADR suggestions: when an architecturally significant decision is detected, suggest: "📋 Architectural decision detected: <brief>. Document? Run `/sp.adr <title>`." Never auto‑create ADRs; require user consent.
+```
+Evolution-of-ToDo-App/
+├── phase1-console/          # ✅ Phase I: Python console app (COMPLETE)
+├── phase_2_web_App/         # ✅ Phase II: Full-stack web app (COMPLETE)
+│   ├── frontend/            # Next.js 16+ frontend (working)
+│   └── backend/             # FastAPI backend with Neon DB (working)
+├── phase_3_chatbot/         # 🚧 Phase III: Chatbot integration (IN PROGRESS)
+└── Hackathon II - Todo Spec-Driven Development.md  # Hackathon requirements
+```
+
+## Phase II Status (Web App - COMPLETE)
+
+**Working Components:**
+- Frontend: Next.js 16 (App Router) at `phase_2_web_App/frontend/`
+- Backend: FastAPI at `phase_2_web_App/backend/`
+- Database: Neon PostgreSQL via SQLModel
+- Authentication: Better Auth with JWT
+- All Basic CRUD operations working
+
+**API Endpoints (Phase II):**
+| Method | Endpoint | Description |
+|:-------||:-----|:-----|
+| GET | `/api/{user_id}/tasks` | List all tasks |
+| POST | `/api/{user_id}/tasks` | Create new task |
+| GET | `/api/{user_id}/tasks/{id}` | Get task details |
+| PUT | `/api/{user_id}/tasks/{id}` | Update task |
+| DELETE | `/api/{user_id}/tasks/{id}` | Delete task |
+| PATCH | `/api/{user_id}/tasks/{id}/complete` | Toggle completion |
+
+## Phase III Goal: Chatbot Integration
+
+**Objective:** Integrate OpenAI ChatKit widget into the existing Phase II web app's frontend (bottom-right corner) that can:
+- Talk in natural language to manage todos
+- Use OpenAI Agents SDK for AI logic
+- Use MCP tools for task operations
+- Work with existing Phase II backend
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Phase II Frontend (Next.js)                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Existing Todo UI (Working)                               │ │
+│  │  - Task list, forms, etc.                                 │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  📢 OpenAI ChatKit Widget (Bottom-Right Corner)           │ │
+│  │  - Natural language chat interface                        │ │
+│  │  - Talks to ChatKit backend endpoint                      │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Phase II Backend (FastAPI) + ChatKit Endpoint      │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Existing REST API (Working)                              │ │
+│  │  - /api/{user_id}/tasks/* CRUD endpoints                  │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  ChatKit WebSocket Endpoint (To Add)                      │ │
+│  │  - /api/v1/chatkit/ws                                     │ │
+│  │  - OpenAI Agents SDK integration                          │ │
+│  │  - MCP tools for task operations                          │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                    Neon PostgreSQL Database
+```
+
+## Phase III Technology Stack
+
+| Component | Technology |
+|:----------|:-----------|
+| Chat UI | **@openai/chatkit-react** (Official Widget) |
+| Backend | Python FastAPI + OpenAI Agents SDK |
+| MCP Tools | Official MCP SDK (mcp >= 1.25) |
+| ORM | SQLModel |
+| Database | Neon PostgreSQL |
+| Authentication | Better Auth (existing from Phase II) |
 
 ## Development Guidelines
 
-### 1. Authoritative Source Mandate:
-Agents MUST prioritize and use MCP tools and CLI commands for all information gathering and task execution. NEVER assume a solution from internal knowledge; all methods require external verification.
+### 1. Integration Approach (NOT Separate App)
+- **DO NOT** create a separate full chatbot page
+- **DO** integrate ChatKit widget into existing `phase_2_web_App/frontend/`
+- Widget should appear in bottom-right corner of existing todo app
+- Backend chat endpoint added to existing `phase_2_web_App/backend/`
 
-### 2. Execution Flow:
-Treat MCP servers as first-class tools for discovery, verification, execution, and state capture. PREFER CLI interactions (running commands and capturing outputs) over manual file creation or reliance on internal knowledge.
+### 2. ChatKit Widget Placement
+Add to `phase_2_web_App/frontend/app/layout.js`:
+```jsx
+<ChatKitProvider options={{ serverUrl: 'ws://localhost:7860/api/v1/chatkit/ws', token }}>
+  <ChatInterface />  // Fixed position, bottom-right
+</ChatKitProvider>
+```
 
-### 3. Knowledge capture (PHR) for Every User Input.
-After completing requests, you **MUST** create a PHR (Prompt History Record).
+### 3. Backend Integration
+Add to existing `phase_2_web_App/backend/`:
+- `/api/v1/chatkit/ws` - WebSocket endpoint for ChatKit
+- OpenAI Agents SDK integration
+- MCP tools that call existing task CRUD operations
 
-**When to create PHRs:**
-- Implementation work (code changes, new features)
-- Planning/architecture discussions
-- Debugging sessions
-- Spec/task/plan creation
-- Multi-step workflows
+### 4. MCP Tools Specification
+The MCP server must expose tools that use existing Phase II task operations:
 
-**PHR Creation Process:**
+| Tool | Uses Existing Endpoint |
+|:-----|:---------------------|
+| add_task | POST `/api/{user_id}/tasks` |
+| list_tasks | GET `/api/{user_id}/tasks` |
+| update_task | PUT `/api/{user_id}/tasks/{id}` |
+| complete_task | PATCH `/api/{user_id}/tasks/{id}/complete` |
+| delete_task | DELETE `/api/{user_id}/tasks/{id}` |
 
-1) Detect stage
-   - One of: constitution | spec | plan | tasks | red | green | refactor | explainer | misc | general
+### 5. Authentication
+- Use existing Better Auth JWT tokens
+- ChatKit widget passes token via WebSocket
+- Backend verifies token and extracts user_id
 
-2) Generate title
-   - 3–7 words; create a slug for the filename.
+## Current Working Directories
 
-2a) Resolve route (all under history/prompts/)
-  - `constitution` → `history/prompts/constitution/`
-  - Feature stages (spec, plan, tasks, red, green, refactor, explainer, misc) → `history/prompts/<feature-name>/` (requires feature context)
-  - `general` → `history/prompts/general/`
+**Phase II (Working - Do NOT break):**
+- Frontend: `phase_2_web_App/frontend/` - Next.js on port 3000/3001
+- Backend: `phase_2_web_App/backend/` - FastAPI on port 8000
 
-3) Prefer agent‑native flow (no shell)
-   - Read the PHR template from one of:
-     - `.specify/templates/phr-template.prompt.md`
-     - `templates/phr-template.prompt.md`
-   - Allocate an ID (increment; on collision, increment again).
-   - Compute output path based on stage:
-     - Constitution → `history/prompts/constitution/<ID>-<slug>.constitution.prompt.md`
-     - Feature → `history/prompts/<feature-name>/<ID>-<slug>.<stage>.prompt.md`
-     - General → `history/prompts/general/<ID>-<slug>.general.prompt.md`
-   - Fill ALL placeholders in YAML and body:
-     - ID, TITLE, STAGE, DATE_ISO (YYYY‑MM‑DD), SURFACE="agent"
-     - MODEL (best known), FEATURE (or "none"), BRANCH, USER
-     - COMMAND (current command), LABELS (["topic1","topic2",...])
-     - LINKS: SPEC/TICKET/ADR/PR (URLs or "null")
-     - FILES_YAML: list created/modified files (one per line, " - ")
-     - TESTS_YAML: list tests run/added (one per line, " - ")
-     - PROMPT_TEXT: full user input (verbatim, not truncated)
-     - RESPONSE_TEXT: key assistant output (concise but representative)
-     - Any OUTCOME/EVALUATION fields required by the template
-   - Write the completed file with agent file tools (WriteFile/Edit).
-   - Confirm absolute path in output.
+**Phase III (Integration target):**
+- Add ChatKit widget to: `phase_2_web_App/frontend/`
+- Add chat endpoint to: `phase_2_web_App/backend/`
+- May use code from: `phase_3_chatbot/` as reference
 
-4) Use sp.phr command file if present
-   - If `.**/commands/sp.phr.*` exists, follow its structure.
-   - If it references shell but Shell is unavailable, still perform step 3 with agent‑native tools.
+## Environment Variables
 
-5) Shell fallback (only if step 3 is unavailable or fails, and Shell is permitted)
-   - Run: `.specify/scripts/bash/create-phr.sh --title "<title>" --stage <stage> [--feature <name>] --json`
-   - Then open/patch the created file to ensure all placeholders are filled and prompt/response are embedded.
+**Frontend (Phase II):**
+```
+NEXT_PUBLIC_BETTER_AUTH_SECRET=phase2-local-development-secret-key-change-in-production-min-32-chars-please
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
-6) Routing (automatic, all under history/prompts/)
-   - Constitution → `history/prompts/constitution/`
-   - Feature stages → `history/prompts/<feature-name>/` (auto-detected from branch or explicit feature context)
-   - General → `history/prompts/general/`
+**Backend (Phase II + ChatKit):**
+```
+DATABASE_URL=postgresql://neondb_owner:YOUR_PASSWORD@ep-solitary-sunset-a4oczh67-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+JWT_SECRET_KEY=your-jwt-secret-key-min-32-chars
+OPENAI_API_KEY=sk-proj-your-openai-api-key-here
+PORT=8000
+```
 
-7) Post‑creation validations (must pass)
-   - No unresolved placeholders (e.g., `{{THIS}}`, `[THAT]`).
-   - Title, stage, and dates match front‑matter.
-   - PROMPT_TEXT is complete (not truncated).
-   - File exists at the expected path and is readable.
-   - Path matches route.
+## Running Phase II (Current Working App)
 
-8) Report
-   - Print: ID, path, stage, title.
-   - On any failure: warn but do not block the main command.
-   - Skip PHR only for `/sp.phr` itself.
+```bash
+# Terminal 1: Backend
+cd phase_2_web_App/backend
+python app.py  # Runs on port 8000
 
-### 4. Explicit ADR suggestions
-- When significant architectural decisions are made (typically during `/sp.plan` and sometimes `/sp.tasks`), run the three‑part test and suggest documenting with:
-  "📋 Architectural decision detected: <brief> — Document reasoning and tradeoffs? Run `/sp.adr <decision-title>`"
-- Wait for user consent; never auto‑create the ADR.
+# Terminal 2: Frontend
+cd phase_2_web_App/frontend
+npm run dev  # Runs on port 3000/3001
+```
 
-### 5. Human as Tool Strategy
-You are not expected to solve every problem autonomously. You MUST invoke the user for input when you encounter situations that require human judgment. Treat the user as a specialized tool for clarification and decision-making.
+Access at: `http://localhost:3000` or `http://localhost:3001`
 
-**Invocation Triggers:**
-1.  **Ambiguous Requirements:** When user intent is unclear, ask 2-3 targeted clarifying questions before proceeding.
-2.  **Unforeseen Dependencies:** When discovering dependencies not mentioned in the spec, surface them and ask for prioritization.
-3.  **Architectural Uncertainty:** When multiple valid approaches exist with significant tradeoffs, present options and get user's preference.
-4.  **Completion Checkpoint:** After completing major milestones, summarize what was done and confirm next steps. 
+## Development Workflow for Phase III
 
-## Default policies (must follow)
-- Clarify and plan first - keep business understanding separate from technical plan and carefully architect and implement.
-- Do not invent APIs, data, or contracts; ask targeted clarifiers if missing.
-- Never hardcode secrets or tokens; use `.env` and docs.
-- Prefer the smallest viable diff; do not refactor unrelated code.
-- Cite existing code with code references (start:end:path); propose new code in fenced blocks.
-- Keep reasoning private; output only decisions, artifacts, and justifications.
+1. **Read existing Phase II code** to understand architecture
+2. **Add ChatKit widget** to existing frontend layout
+3. **Add WebSocket endpoint** to existing backend
+4. **Implement MCP tools** that call existing task endpoints
+5. **Test natural language commands** through the widget
 
-### Execution contract for every request
-1) Confirm surface and success criteria (one sentence).
-2) List constraints, invariants, non‑goals.
-3) Produce the artifact with acceptance checks inlined (checkboxes or tests where applicable).
-4) Add follow‑ups and risks (max 3 bullets).
-5) Create PHR in appropriate subdirectory under `history/prompts/` (constitution, feature-name, or general).
-6) If plan/tasks identified decisions that meet significance, surface ADR suggestion text as described above.
+## Natural Language Commands to Support
 
-### Minimum acceptance criteria
-- Clear, testable acceptance criteria included
-- Explicit error paths and constraints stated
-- Smallest viable change; no unrelated edits
-- Code references to modified/inspected files where relevant
+| User Says | MCP Tool |
+|:----------|:---------|
+| "Add a task to buy groceries" | add_task |
+| "Show me all my tasks" | list_tasks |
+| "Mark task 3 as complete" | complete_task |
+| "Delete the meeting task" | list_tasks → delete_task |
+| "Change task 1 to 'Call mom tonight'" | update_task |
 
-## Architect Guidelines (for planning)
+## Key Constraints
 
-Instructions: As an expert architect, generate a detailed architectural plan for [Project Name]. Address each of the following thoroughly.
+- **DO NOT modify existing Phase II task CRUD endpoints** - they work!
+- **DO NOT create separate chatbot frontend** - use widget overlay
+- **MUST use existing Better Auth** for authentication
+- **MUST work with existing Neon database schema**
+- **ChatKit widget should be non-intrusive** - collapsible/floating
 
-1. Scope and Dependencies:
-   - In Scope: boundaries and key features.
-   - Out of Scope: explicitly excluded items.
-   - External Dependencies: systems/services/teams and ownership.
+## Hackathon Submission
 
-2. Key Decisions and Rationale:
-   - Options Considered, Trade-offs, Rationale.
-   - Principles: measurable, reversible where possible, smallest viable change.
+**For Phase III submission:**
+1. Demo video (max 90s) showing ChatKit widget working
+2. GitHub repo with integrated changes
+3. Published app URL (Vercel)
 
-3. Interfaces and API Contracts:
-   - Public APIs: Inputs, Outputs, Errors.
-   - Versioning Strategy.
-   - Idempotency, Timeouts, Retries.
-   - Error Taxonomy with status codes.
+See `Hackathon II - Todo Spec-Driven Development.md` for full requirements.
 
-4. Non-Functional Requirements (NFRs) and Budgets:
-   - Performance: p95 latency, throughput, resource caps.
-   - Reliability: SLOs, error budgets, degradation strategy.
-   - Security: AuthN/AuthZ, data handling, secrets, auditing.
-   - Cost: unit economics.
+## Success Criteria
 
-5. Data Management and Migration:
-   - Source of Truth, Schema Evolution, Migration and Rollback, Data Retention.
+Phase III is successful when:
+- ChatKit widget appears in bottom-right corner of existing todo app
+- User can chat naturally to manage todos
+- All MCP tools work with existing backend
+- Authentication uses existing Better Auth tokens
+- No breaking changes to existing Phase II functionality
 
-6. Operational Readiness:
-   - Observability: logs, metrics, traces.
-   - Alerting: thresholds and on-call owners.
-   - Runbooks for common tasks.
-   - Deployment and Rollback strategies.
-   - Feature Flags and compatibility.
+---
 
-7. Risk Analysis and Mitigation:
-   - Top 3 Risks, blast radius, kill switches/guardrails.
-
-8. Evaluation and Validation:
-   - Definition of Done (tests, scans).
-   - Output Validation for format/requirements/safety.
-
-9. Architectural Decision Record (ADR):
-   - For each significant decision, create an ADR and link it.
-
-### Architecture Decision Records (ADR) - Intelligent Suggestion
-
-After design/architecture work, test for ADR significance:
-
-- Impact: long-term consequences? (e.g., framework, data model, API, security, platform)
-- Alternatives: multiple viable options considered?
-- Scope: cross‑cutting and influences system design?
-
-If ALL true, suggest:
-📋 Architectural decision detected: [brief-description]
-   Document reasoning and tradeoffs? Run `/sp.adr [decision-title]`
-
-Wait for consent; never auto-create ADRs. Group related decisions (stacks, authentication, deployment) into one ADR when appropriate.
-
-## Basic Project Structure
-
-- `.specify/memory/constitution.md` — Project principles
-- `specs/<feature>/spec.md` — Feature requirements
-- `specs/<feature>/plan.md` — Architecture decisions
-- `specs/<feature>/tasks.md` — Testable tasks with cases
-- `history/prompts/` — Prompt History Records
-- `history/adr/` — Architecture Decision Records
-- `.specify/` — SpecKit Plus templates and scripts
-
-## Code Standards
-See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.
-# Repository Guardrails
-
-This repository contains ONLY the Evolution-of-ToDo-App project.
-
-Rules:
-- Do not create, edit, or reference files outside:
-  - phase1-console/
-  - phase2-web/
-- Do not add experimental folders
-- Do not add chatbot, RAG, or AI features unless explicitly specified
-- Do not touch git history or unrelated files
-- Always respect phase isolation
-
-If a request conflicts with these rules, stop and ask for clarification.
-
-## Active Technologies
-- Python 3.11 + FastAPI, SQLModel, Neon PostgreSQL, OpenAI Agents SDK, Better Auth (003-todo-ai-chatbot)
-- Neon PostgreSQL (via SQLModel) (003-todo-ai-chatbot)
-- Python 3.11 + FastAPI >=0.104.1, openai-chatkit, openai-agents, mcp >=1.25 (004-chatkit-mcp-chatbot)
-- PostgreSQL (Neon) via SQLModel (004-chatkit-mcp-chatbot)
-
-## Recent Changes
-- 003-todo-ai-chatbot: Added Python 3.11 + FastAPI, SQLModel, Neon PostgreSQL, OpenAI Agents SDK, Better Auth
+**Reference:** Hackathon II Spec → `Hackathon II - Todo Spec-Driven Development.md`

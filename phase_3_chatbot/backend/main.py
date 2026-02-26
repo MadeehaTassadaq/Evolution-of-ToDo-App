@@ -60,7 +60,9 @@ if os.getenv("ENVIRONMENT", "development") == "development":
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
-        "http://localhost:8000",  # Backend server
+        "http://localhost:8000",  # Phase II Backend server
+        "http://localhost:7860",  # Phase III Backend server (this server)
+        "http://127.0.0.1:7860",
     ])
 
 app.add_middleware(

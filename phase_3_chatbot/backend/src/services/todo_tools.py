@@ -4,7 +4,11 @@ Database-backed tools for todo management operations that can be used by the bac
 without MCP server dependencies.
 """
 
+import logging
 from typing import List, Optional, Dict, Any
+
+# Configure logging for debugging
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel
 from uuid import UUID
 from database.models.todo import Todo, TodoCreate, TodoUpdate
@@ -429,12 +433,15 @@ class TodoTools:
         try:
             # Validate that at least one identifier is provided
             if not task_id and not task_title:
+                logger.warning(f"delete_task called without task_id or task_title for user {user_id}")
                 return {
                     "success": False,
                     "error_code": "VALIDATION_ERROR",
                     "error_message": "Either task_id or task_title must be provided",
                     "recoverable": True
                 }
+
+            logger.info(f"delete_task called: user_id={user_id}, task_id={task_id}, task_title={task_title}")
 
             # Convert user_id to UUID format
             user_uuid = self._convert_user_id(user_id)
@@ -444,8 +451,10 @@ class TodoTools:
 
             # If task_title provided, look up by title first
             if task_title and not task_id:
+                logger.info(f"Looking up task by title: '{task_title}' for user {user_uuid}")
                 todo = self.todo_service.get_todo_by_title(task_title, user_uuid)
                 if not todo:
+                    logger.warning(f"Task not found with title: '{task_title}' for user {user_uuid}")
                     return {
                         "success": False,
                         "error_code": "TASK_NOT_FOUND",
@@ -454,12 +463,14 @@ class TodoTools:
                     }
                 task_uuid = todo.id
                 deleted_task_title = todo.title
+                logger.info(f"Found task by title: {task_uuid}")
             elif task_id:
                 # Convert task_id to UUID if it's a string
                 if isinstance(task_id, str):
                     try:
                         task_uuid = UUID(task_id)
                     except ValueError:
+                        logger.error(f"Invalid task_id format: {task_id}")
                         return {
                             "success": False,
                             "error_code": "VALIDATION_ERROR",
@@ -468,8 +479,10 @@ class TodoTools:
                         }
                 else:
                     task_uuid = task_id
+                logger.info(f"Using task_id: {task_uuid}")
 
             # Delete the task
+            logger.info(f"Deleting task: todo_id={task_uuid}, user_id={user_uuid}")
             success = self.todo_service.delete_todo(
                 todo_id=task_uuid,
                 user_id=user_uuid
@@ -477,6 +490,7 @@ class TodoTools:
 
             if not success:
                 identifier = task_title if task_title else str(task_id)
+                logger.error(f"Failed to delete task '{identifier}' - not found or permission denied")
                 return {
                     "success": False,
                     "error_code": "TASK_NOT_FOUND_OR_PERMISSION_DENIED",
@@ -484,12 +498,14 @@ class TodoTools:
                     "recoverable": False
                 }
 
+            logger.info(f"Successfully deleted task: '{deleted_task_title}'")
             return {
                 "success": True,
                 "message": f"Task '{deleted_task_title}' deleted successfully"
             }
 
         except Exception as e:
+            logger.exception(f"Exception in delete_task: {str(e)}")
             return {
                 "success": False,
                 "error_code": "DELETE_TASK_ERROR",

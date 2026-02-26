@@ -1,0 +1,39 @@
+# ============================================
+# KUBERNETES LEARNING PATH - STEP 6: PHASE 2 BACKEND POD
+# ============================================
+# Phase 2 Web App Backend (FastAPI on port 8000)
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: todo-phase2-backend-pod
+  labels:
+    app: todo-phase2-backend
+    phase: phase2-backend
+spec:
+  containers:
+  - name: backend
+    image: madeeha456/todo-backend-phase2:latest
+    imagePullPolicy: Never  # Use local image
+    ports:
+    - containerPort: 8000    # FastAPI runs on port 8000
+      name: http
+    env:
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          name: todo-secrets
+          key: database-url
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+---
+# NOTES FOR LEARNING:
+# ===================
+# Phase 2 backend doesn't need BETTER_AUTH_SECRET or OPENAI_API_KEY
+# It uses Better Auth tokens from the frontend

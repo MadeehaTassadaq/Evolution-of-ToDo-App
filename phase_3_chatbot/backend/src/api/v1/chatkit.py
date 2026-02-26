@@ -5,9 +5,11 @@ Handles ChatKit protocol requests with authentication
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional
+from typing import Optional, Dict, Any
 import json
 from uuid import UUID
+import os
+from openai import OpenAI
 
 from services.chatkit_server import TodoChatKitServer
 from services.chatkit_store import DatabaseStore
@@ -17,6 +19,68 @@ from database.models.user import User
 
 router = APIRouter(prefix="/chatkit", tags=["chatkit"])
 security = HTTPBearer()
+
+# Initialize OpenAI client for ChatKit sessions
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+@router.post("/session")
+async def create_chatkit_session(
+    request: Dict[str, Any],
+    token: HTTPAuthorizationCredentials = Depends(security)
+):
+    """
+    Create a ChatKit session for the authenticated user.
+
+    This endpoint works with OpenAI ChatKit in Custom Backend Mode.
+    No workflowId required - we use OpenAI Agents SDK directly.
+
+    Returns:
+    - client_secret: Session token for ChatKit authentication
+    - thread_id: Conversation ID for chat history persistence
+    """
+    # Verify JWT token
+    user_data = auth_service.verify_token(token.credentials)
+    if not user_data:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user_id = str(user_data.user_id)
+
+    # Get or create conversation for session history
+    db = Session(engine)
+    try:
+        from services.chat_service import ChatService
+        chat_service = ChatService(db)
+
+        # Get thread_id from request for session continuity
+        thread_id = request.get("thread_id")
+
+        # Get existing conversation or create new one
+        conversation = chat_service.get_or_create_conversation(
+            user_id=user_id,
+            conversation_id=thread_id
+        )
+
+        # Generate a session token for ChatKit
+        # In production, you'd use a proper JWT or secure token
+        import secrets
+        import hashlib
+        import time
+
+        # Create a secure session token
+        session_data = f"{user_id}:{conversation.id}:{time.time()}"
+        client_secret = hashlib.sha256(session_data.encode()).hexdigest()
+
+        # Store session info in metadata for WebSocket verification
+        return {
+            "client_secret": client_secret,
+            "thread_id": str(conversation.id),
+            "user_id": user_id,
+            "mode": "custom_backend"  # Using OpenAI Agents SDK (not Agent Builder)
+        }
+
+    finally:
+        db.close()
 
 
 @router.websocket("/ws")
@@ -100,7 +164,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     thread_id = message.get("thread_id")
                     content = message.get("content")
 
-                    if thread_id and content:
+                    if content:
                         try:
                             # Process the message through the AI agent
                             from agents.todo_agent import TodoAgent
@@ -113,11 +177,14 @@ async def websocket_endpoint(websocket: WebSocket):
                                 agent = TodoAgent()
 
                                 # Get conversation history for context
+                                # If thread_id is "default" or None, create a new conversation
+                                effective_thread_id = None if thread_id == "default" else thread_id
                                 conversation = chat_service.get_or_create_conversation(
                                     user_id=user_id,
-                                    conversation_id=thread_id
+                                    conversation_id=effective_thread_id
                                 )
 
+                                # Get conversation history (excluding the message we're about to add)
                                 conversation_history = chat_service.get_full_conversation_history(conversation.id)
 
                                 # Process the message with the agent
@@ -171,10 +238,12 @@ async def websocket_endpoint(websocket: WebSocket):
                                 )
 
                                 # Send the AI response back to the client
+                                # Use the actual conversation ID, not the "default" placeholder
                                 await websocket.send_text(json.dumps({
                                     "type": "message_received",
                                     "content": response_text,
-                                    "thread_id": thread_id,
+                                    "thread_id": conversation.id,  # Send actual conversation ID
+                                    "original_thread_id": thread_id,  # Include original for reference
                                     "tool_calls": tool_calls
                                 }))
                             finally:

@@ -1,193 +1,98 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
-// Define a simple ChatKit-like interface since we're connecting to our existing backend
-interface Message {
-  id: string;
-  text: string;
-  sender: 'user' | 'bot' | 'system';
-  timestamp: string;
-}
-
 const ChatKitWidget: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isWidgetOpen, setIsWidgetOpen] = useState(false);
+  const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null); // Store conversation ID for session history
   const pathname = usePathname();
 
-  // Helper function to get token from all possible sources
-  const getTokenFromAllSources = (): string | null => {
-    const tokenFromLocalStorage = localStorage.getItem('authToken') ?? null;
-    const tokenFromBetterAuth = localStorage.getItem('better-auth-token') ?? null;
-    const tokenFromCookies = document.cookie
-      .split('; ')
-      .find(row => row.trim().startsWith('authToken='))
-      ?.split('=')[1] ?? null;
-    const tokenFromBetterAuthCookie = document.cookie
-      .split('; ')
-      .find(row => row.trim().startsWith('better-auth-token='))
-      ?.split('=')[1] ?? null;
-
-    // Try tokens in order of preference
-    return tokenFromLocalStorage || tokenFromBetterAuth || tokenFromCookies || tokenFromBetterAuthCookie;
+  const getToken = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('authToken') || localStorage.getItem('better-auth-token');
   };
 
-  // Check for auth token on component mount and listen for auth changes
   useEffect(() => {
-    // Initial token check
-    const token = getTokenFromAllSources();
+    const token = getToken();
     setAuthToken(token);
     setIsInitialized(true);
 
-    // Listen for auth state changes from AuthContext (same-page auth updates)
-    const handleAuthStateChanged = (event: CustomEvent<{ isAuthenticated: boolean; token: string | null }>) => {
-      if (event.detail.isAuthenticated && event.detail.token) {
-        setAuthToken(event.detail.token);
-      } else {
-        setAuthToken(null);
-      }
+    const handleStorageChange = () => setAuthToken(getToken());
+    const handleAuthChange = (e: any) => {
+      if (e.detail?.token) setAuthToken(e.detail.token);
     };
 
-    // Listen for storage changes (cross-tab auth sync)
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'authToken' || event.key === 'better-auth-token') {
-        const newToken = getTokenFromAllSources();
-        setAuthToken(newToken);
-      }
-    };
-
-    window.addEventListener('authStateChanged', handleAuthStateChanged as EventListener);
     window.addEventListener('storage', handleStorageChange);
-
+    window.addEventListener('authStateChanged', handleAuthChange);
     return () => {
-      window.removeEventListener('authStateChanged', handleAuthStateChanged as EventListener);
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('authStateChanged', handleAuthChange);
     };
   }, []);
 
-  // Don't show the widget on the chatkit page to avoid conflicts
-  if (pathname === '/chatkit' || !isInitialized) {
-    return null;
-  }
-
   const sendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
+    if (!inputValue.trim() || !authToken) return;
 
-    // Get the token again to ensure it's fresh - try all possible sources
-    const currentToken = getTokenFromAllSources();
-
-    // Update authToken state if it was found (in case it was set after initial mount)
-    if (currentToken && !authToken) {
-      setAuthToken(currentToken);
-    }
-
-    if (!currentToken) {
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        text: 'Authentication required. Please log in to chat with the AI assistant.',
-        sender: 'system',
-        timestamp: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-      return;
-    }
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: inputValue,
-      sender: 'user',
-      timestamp: new Date().toISOString()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    const userMessage = inputValue;
     setInputValue('');
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
     try {
-      const response = await fetch(process.env.NEXT_PUBLIC_CHATBOT_API_URL + '/api/v1/chat', {
+      // Call backend endpoint - use stored conversation_id for session history
+      const response = await fetch('http://localhost:7860/api/v1/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentToken}`,
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify({
-          message: inputValue,
-          conversation_id: conversationId
+          message: userMessage,
+          conversation_id: conversationId, // Use stored conversation_id (null on first message creates new)
         }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      if (!response.ok) throw new Error('Failed to send message');
 
-        // Store the server's conversation_id for subsequent messages
-        if (data.conversation_id && !conversationId) {
-          setConversationId(data.conversation_id);
-        }
+      const data = await response.json();
 
-        const botMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: data.response,
-          sender: 'bot',
-          timestamp: data.timestamp
-        };
-        setMessages(prev => [...prev, botMessage]);
-      } else if (response.status === 401) {
-        // Handle unauthorized access
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: 'Authentication required. Please log in again.',
-          sender: 'system',
-          timestamp: new Date().toISOString()
-        };
-        setMessages(prev => [...prev, errorMessage]);
+      // Store the conversation_id from response for session history
+      if (data.conversation_id && !conversationId) {
+        setConversationId(data.conversation_id);
+      }
 
-        // Clear the token and update state
-        setAuthToken(null);
-        // Don't redirect here since we're in the chat widget
-      } else {
-        const errorData = await response.json();
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: `Sorry, I encountered an error: ${errorData.detail || 'Unable to process your request'}`,
-          sender: 'system',
-          timestamp: new Date().toISOString()
-        };
-        setMessages(prev => [...prev, errorMessage]);
+      // Display the response
+      const assistantMessage = data.response || data.message || 'Done!';
+      setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
+
+      // If there were tool calls, you could show them as indicators
+      if (data.tool_calls && data.tool_calls.length > 0) {
+        console.log('Tools used:', data.tool_calls);
       }
     } catch (error) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: 'Sorry, I\'m having trouble connecting. Please try again.',
-        sender: 'system',
-        timestamp: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      console.error('Chat error:', error);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, there was an error. Please try again.' }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
+  if (pathname === '/chatkit' || !isInitialized || !authToken) return null;
 
   return (
     <>
-      {/* Floating Chat Button */}
-      {!isOpen && authToken && (
+      {!isWidgetOpen && (
         <button
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 bg-green-500 text-black p-4 rounded-full shadow-lg hover:bg-green-400 transition-all z-50"
-          aria-label="Open chat"
+          onClick={() => setIsWidgetOpen(true)}
+          className="fixed bottom-6 right-6 bg-emerald-500 hover:bg-emerald-400 text-black p-4 rounded-full shadow-lg transition-all z-50"
+          aria-label="Open AI Assistant"
+          title="Chat with AI Assistant"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -195,92 +100,66 @@ const ChatKitWidget: React.FC = () => {
         </button>
       )}
 
-      {/* Chat Widget with black and green theme */}
-      {isOpen && authToken && (
-        <div className="fixed bottom-6 right-6 w-80 h-96 bg-black border border-green-500 rounded-lg shadow-xl flex flex-col z-50">
-          {/* Header */}
-          <div className="bg-green-500 text-black p-3 rounded-t-lg flex justify-between items-center">
-            <span className="font-semibold">Todo AI Assistant</span>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-black hover:text-gray-800 focus:outline-none"
-              title="Close"
-            >
+      {isWidgetOpen && (
+        <div className="fixed bottom-6 right-6 w-[400px] h-[600px] bg-black border border-emerald-500 rounded-lg shadow-xl z-50 flex flex-col">
+          <div className="bg-emerald-500 text-black p-4 flex justify-between items-center rounded-t-lg">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">🤖 Todo AI Assistant</span>
+            </div>
+            <button onClick={() => setIsWidgetOpen(false)} className="text-black hover:text-gray-800 p-1">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
             </button>
           </div>
 
-          {/* Messages Container */}
-          <div className="flex-1 overflow-y-auto p-3 bg-gray-900">
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-green-400 text-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                </svg>
-                <p className="text-center">Start chatting with your AI assistant!</p>
-                <p className="mt-1 text-xs text-center">Ask me to manage your tasks</p>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.length === 0 && (
+              <div className="text-center text-gray-400 mt-10 text-sm">
+                <p className="mb-2">👋 Hello! I'm your AI Todo Assistant.</p>
+                <p>Try saying:</p>
+                <ul className="text-xs mt-2 space-y-1 text-left inline-block">
+                  <li>"Add a task to buy groceries"</li>
+                  <li>"Show me all my tasks"</li>
+                  <li>"Complete task 1"</li>
+                </ul>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
-                        message.sender === 'user'
-                          ? 'bg-green-500 text-black rounded-tr-none'
-                          : message.sender === 'system'
-                          ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                          : 'bg-gray-700 text-green-300 rounded-tl-none'
-                      }`}
-                    >
-                      {message.text}
-                    </div>
-                  </div>
-                ))}
-                {isLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-gray-700 text-green-300 rounded-2xl rounded-tl-none px-4 py-2 text-sm">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+            )}
+            {messages.map((msg, idx) => (
+              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] p-3 rounded-lg text-sm ${
+                  msg.role === 'user' ? 'bg-emerald-500 text-black' : 'bg-gray-800 text-white'
+                }`}>
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-800 text-white p-3 rounded-lg text-sm">
+                  ⏳ Thinking...
+                </div>
               </div>
             )}
           </div>
 
-          {/* Input Area */}
-          <div className="border-t border-green-500 p-2 bg-black">
-            <div className="flex">
-              <textarea
+          <div className="p-3 border-t border-emerald-500">
+            <div className="flex gap-2">
+              <input
+                type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask me to manage your tasks..."
-                className="flex-1 bg-gray-800 text-white border border-green-500 rounded-lg p-2 text-sm resize-none h-12 max-h-32"
-                rows={1}
-                disabled={!authToken || isLoading}
+                onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                placeholder="Type a message..."
+                className="flex-1 bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-emerald-500 focus:outline-none text-sm"
+                disabled={isLoading}
               />
               <button
                 onClick={sendMessage}
-                disabled={!inputValue.trim() || isLoading || !authToken}
-                className={`ml-2 px-4 rounded-lg text-black flex items-center ${
-                  inputValue.trim() && authToken && !isLoading
-                    ? 'bg-green-500 hover:bg-green-400'
-                    : 'bg-gray-600 cursor-not-allowed'
-                }`}
+                disabled={isLoading || !inputValue.trim()}
+                className="bg-emerald-500 text-black px-4 py-2 rounded-lg hover:bg-emerald-400 disabled:opacity-50 text-sm font-medium"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                </svg>
+                Send
               </button>
             </div>
           </div>
