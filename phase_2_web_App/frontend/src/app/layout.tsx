@@ -1,13 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import Script from "next/script";
 import ClientWrapper from "../components/ClientWrapper";
-import ChatKitWidget from "../components/ChatKitWidget";
+import ChatKitOfficialWidget from "../components/ChatKitOfficialWidget";
+import { ChatKitErrorBoundary } from "../components/ChatKitErrorBoundary";
 import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
 
 export const metadata: Metadata = {
   title: "TaskFlow - Modern Task Management",
@@ -33,10 +29,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} dark`}>
-      <body className="font-sans antialiased bg-black text-white">
+    <html lang="en" className="dark">
+      <body className="font-sans antialiased bg-black text-white" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
         <ClientWrapper>{children}</ClientWrapper>
-        <ChatKitWidget />
+        <ChatKitErrorBoundary>
+          <ChatKitOfficialWidget />
+        </ChatKitErrorBoundary>
+        {/* Load ChatKit Web Component from CDN */}
+        <Script
+          src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );

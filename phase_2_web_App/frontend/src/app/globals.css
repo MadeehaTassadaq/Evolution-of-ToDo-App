@@ -24,3 +24,245 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ========================================
+   ChatKit Black & Green Theme
+   ======================================== */
+
+/* ChatKit CSS Variables for Black & Green Theme */
+:root {
+  --chatkit-bg-primary: #000000;
+  --chatkit-bg-secondary: #0a0a0a;
+  --chatkit-bg-tertiary: #111111;
+  --chatkit-bg-hover: #1a1a1a;
+  --chatkit-border-color: #10b981;
+  --chatkit-border-light: #059669;
+  --chatkit-text-primary: #10b981;
+  --chatkit-text-secondary: #6ee7b7;
+  --chatkit-text-muted: #34d399;
+  --chatkit-accent: #10b981;
+  --chatkit-accent-hover: #059669;
+  --chatkit-accent-text: #000000;
+}
+
+/* ChatKit Container Styles */
+.chatkit-container,
+[data-chatkit-container] {
+  background: var(--chatkit-bg-primary) !important;
+  border: 1px solid var(--chatkit-border-color) !important;
+  border-radius: 12px !important;
+  color: var(--chatkit-text-primary) !important;
+}
+
+/* ChatKit Header Styles */
+.chatkit-header,
+.chatkit-header *,
+[data-chatkit-header] {
+  background: var(--chatkit-bg-secondary) !important;
+  border-bottom: 1px solid var(--chatkit-border-color) !important;
+  color: var(--chatkit-text-primary) !important;
+}
+
+.chatkit-header h2,
+.chatkit-header h3,
+.chatkit-header .chatkit-title,
+[data-chatkit-header] h2,
+[data-chatkit-header] h3 {
+  color: var(--chatkit-text-primary) !important;
+}
+
+/* ChatKit Message Area */
+.chatkit-message-area,
+.chatkit-messages,
+[data-chatkit-messages] {
+  background: var(--chatkit-bg-primary) !important;
+}
+
+/* User Message Bubbles */
+.chatkit-message-user,
+[data-chatkit-message-user] {
+  background: var(--chatkit-accent) !important;
+  color: var(--chatkit-accent-text) !important;
+  border-radius: 12px !important;
+  border: none !important;
+}
+
+/* Assistant Message Bubbles */
+.chatkit-message-assistant,
+.chatkit-message-ai,
+[data-chatkit-message-assistant],
+[data-chatkit-message-ai] {
+  background: var(--chatkit-bg-tertiary) !important;
+  color: var(--chatkit-text-primary) !important;
+  border: 1px solid var(--chatkit-border-color) !important;
+  border-radius: 12px !important;
+}
+
+/* System/Tool Messages */
+.chatkit-message-system,
+.chatkit-message-tool,
+[data-chatkit-message-system],
+[data-chatkit-message-tool] {
+  background: var(--chatkit-bg-secondary) !important;
+  color: var(--chatkit-text-secondary) !important;
+  border: 1px dashed var(--chatkit-border-light) !important;
+  border-radius: 8px !important;
+}
+
+/* ChatKit Input Area */
+.chatkit-input-area,
+.chatkit-composer,
+[data-chatkit-composer] {
+  background: var(--chatkit-bg-secondary) !important;
+  border-top: 1px solid var(--chatkit-border-color) !important;
+}
+
+/* ChatKit Input Field */
+.chatkit-input,
+.chatkit-composer textarea,
+.chatkit-composer input,
+[data-chatkit-composer] textarea,
+[data-chatkit-composer] input {
+  background: var(--chatkit-bg-tertiary) !important;
+  color: var(--chatkit-text-primary) !important;
+  border: 1px solid var(--chatkit-border-color) !important;
+  border-radius: 8px !important;
+}
+
+.chatkit-input::placeholder,
+.chatkit-composer textarea::placeholder,
+[data-chatkit-composer] textarea::placeholder {
+  color: var(--chatkit-text-secondary) !important;
+}
+
+.chatkit-input:focus,
+.chatkit-composer textarea:focus,
+[data-chatkit-composer] textarea:focus {
+  outline: none !important;
+  border-color: var(--chatkit-accent) !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
+}
+
+/* ChatKit Send Button */
+.chatkit-send-button,
+.chatkit-composer button[type="submit"],
+[data-chatkit-send] {
+  background: var(--chatkit-accent) !important;
+  color: var(--chatkit-accent-text) !important;
+  border-radius: 8px !important;
+  border: none !important;
+  font-weight: 600 !important;
+}
+
+.chatkit-send-button:hover,
+.chatkit-composer button[type="submit"]:hover,
+[data-chatkit-send]:hover {
+  background: var(--chatkit-accent-hover) !important;
+}
+
+.chatkit-send-button:disabled,
+.chatkit-composer button[type="submit"]:disabled,
+[data-chatkit-send]:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* ChatKit Thread List */
+.chatkit-thread-list,
+[data-chatkit-thread-list] {
+  background: var(--chatkit-bg-primary) !important;
+  border-right: 1px solid var(--chatkit-border-color) !important;
+}
+
+.chatkit-thread-item,
+[data-chatkit-thread-item] {
+  background: transparent !important;
+  color: var(--chatkit-text-primary) !important;
+  border-bottom: 1px solid var(--chatkit-bg-tertiary) !important;
+}
+
+.chatkit-thread-item:hover,
+[data-chatkit-thread-item]:hover {
+  background: var(--chatkit-bg-hover) !important;
+}
+
+.chatkit-thread-item.active,
+[data-chatkit-thread-item].active,
+[data-chatkit-thread-item][data-active="true"] {
+  background: var(--chatkit-bg-secondary) !important;
+  border-left: 3px solid var(--chatkit-accent) !important;
+}
+
+/* ChatKit Scrollbar Styling */
+.chatkit-scroll-area,
+.chatkit-messages,
+[data-chatkit-scroll-area] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--chatkit-border-color) var(--chatkit-bg-tertiary);
+}
+
+.chatkit-scroll-area::-webkit-scrollbar,
+.chatkit-messages::-webkit-scrollbar,
+[data-chatkit-scroll-area]::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chatkit-scroll-area::-webkit-scrollbar-track,
+.chatkit-messages::-webkit-scrollbar-track,
+[data-chatkit-scroll-area]::-webkit-scrollbar-track {
+  background: var(--chatkit-bg-tertiary);
+  border-radius: 4px;
+}
+
+.chatkit-scroll-area::-webkit-scrollbar-thumb,
+.chatkit-messages::-webkit-scrollbar-thumb,
+[data-chatkit-scroll-area]::-webkit-scrollbar-thumb {
+  background: var(--chatkit-border-color);
+  border-radius: 4px;
+}
+
+.chatkit-scroll-area::-webkit-scrollbar-thumb:hover,
+.chatkit-messages::-webkit-scrollbar-thumb:hover,
+[data-chatkit-scroll-area]::-webkit-scrollbar-thumb:hover {
+  background: var(--chatkit-accent-hover);
+}
+
+/* ChatKit Loading/Typing Indicator */
+.chatkit-typing-indicator,
+[data-chatkit-typing] {
+  background: var(--chatkit-bg-secondary) !important;
+  color: var(--chatkit-text-secondary) !important;
+  border-radius: 8px !important;
+}
+
+.chatkit-typing-dot {
+  background: var(--chatkit-accent) !important;
+}
+
+/* ChatKit Attachment/Tool Widgets */
+.chatkit-attachment-widget,
+.chatkit-tool-widget,
+[data-chatkit-attachment],
+[data-chatkit-tool] {
+  background: var(--chatkit-bg-secondary) !important;
+  border: 1px solid var(--chatkit-border-color) !important;
+  border-radius: 8px !important;
+}
+
+/* ChatKit Icons */
+.chatkit-icon,
+[data-chatkit-icon] {
+  color: var(--chatkit-text-primary) !important;
+}
+
+.chatkit-icon-button,
+[data-chatkit-icon-button] {
+  color: var(--chatkit-text-secondary) !important;
+}
+
+.chatkit-icon-button:hover,
+[data-chatkit-icon-button]:hover {
+  color: var(--chatkit-text-primary) !important;
+  background: var(--chatkit-bg-hover) !important;
+}
+

@@ -1,3 +1,4 @@
 """
-API v1 package for Todo AI Chatbot backend
+API v1 endpoints
 """
+

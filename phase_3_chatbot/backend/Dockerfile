@@ -14,21 +14,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
+# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
+
+# Upgrade pip and install dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code
-COPY . .
+COPY src/ ./src/
+COPY main.py .
+
+# Expose the port
+EXPOSE $PORT
 
 # Create a non-root user for security
 RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Expose the port
-EXPOSE $PORT
-
-# Start the application
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-7860}"]
+# Start the application with uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]

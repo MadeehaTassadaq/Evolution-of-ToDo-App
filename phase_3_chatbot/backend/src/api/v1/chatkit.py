@@ -1,296 +1,165 @@
 """
 ChatKit API Endpoint
-Handles ChatKit protocol requests with authentication
+
+Official ChatKit streaming endpoint using Server-Sent Events (SSE).
+Implements the ChatKit protocol for compatibility with @openai/chatkit-react.
 """
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
-import json
-from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi.responses import StreamingResponse
 
-from services.chatkit_server import TodoChatKitServer
-from services.chatkit_store import DatabaseStore
-from database.session import get_session_context, Session, engine
-from services.auth_service import auth_service
-from database.models.user import User
+from services.auth_service import get_current_user
+from services.chatkit_server import chatkit_server
 
-router = APIRouter(prefix="/chatkit", tags=["chatkit"])
-security = HTTPBearer()
+router = APIRouter()
 
 
-@router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for ChatKit protocol"""
-    await websocket.accept()
-
-    try:
-        # Get token from WebSocket query params or headers
-        token = websocket.query_params.get("token")
-        if not token:
-            # Try to get from headers
-            token = websocket.headers.get("authorization", "").replace("Bearer ", "")
-
-        if not token:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Authentication required")
-            return
-
-        # Verify token and get user
-        user_data = auth_service.verify_token(token)
-        if not user_data:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
-            return
-
-        user_id = user_data.user_id
-
-        # Create database session
-        db = Session(engine)
-
-        try:
-            # Create store and server instances
-            store = DatabaseStore(db)
-            server = TodoChatKitServer(db)
-
-            # Here we would typically handle ChatKit protocol messages
-            # For now, just acknowledge the connection
-            await websocket.send_text(json.dumps({
-                "type": "connection_ack",
-                "user_id": user_id,
-                "message": "Connected to Todo AI ChatKit server"
-            }))
-
-            # Handle incoming messages
-            while True:
-                data = await websocket.receive_text()
-                message = json.loads(data)
-
-                # Process ChatKit protocol messages
-                if message.get("type") == "create_thread":
-                    # Create a new thread
-                    thread_meta = await server.create_thread(
-                        user_id=user_id,
-                        metadata=message.get("metadata")
-                    )
-
-                    await websocket.send_text(json.dumps({
-                        "type": "thread_created",
-                        "thread": thread_meta.dict()
-                    }))
-
-                elif message.get("type") == "list_threads":
-                    # List user's threads
-                    threads = await server.list_threads(user_id=user_id)
-
-                    await websocket.send_text(json.dumps({
-                        "type": "threads_list",
-                        "threads": [t.dict() for t in threads]
-                    }))
-
-                elif message.get("type") == "get_thread":
-                    thread_id = message.get("thread_id")
-                    if thread_id:
-                        thread = await server.get_thread(thread_id)
-                        await websocket.send_text(json.dumps({
-                            "type": "thread_data",
-                            "thread": thread.dict() if thread else None
-                        }))
-
-                elif message.get("type") == "send_message":
-                    # Handle sending a message through the AI agent
-                    thread_id = message.get("thread_id")
-                    content = message.get("content")
-
-                    if thread_id and content:
-                        try:
-                            # Process the message through the AI agent
-                            from agents.todo_agent import TodoAgent
-                            from services.chat_service import ChatService
-
-                            # Initialize services
-                            db_session = Session(engine)
-                            try:
-                                chat_service = ChatService(db_session)
-                                agent = TodoAgent()
-
-                                # Get conversation history for context
-                                conversation = chat_service.get_or_create_conversation(
-                                    user_id=user_id,
-                                    conversation_id=thread_id
-                                )
-
-                                conversation_history = chat_service.get_full_conversation_history(conversation.id)
-
-                                # Process the message with the agent
-                                agent_response = agent.process_message(
-                                    user_message=content,
-                                    conversation_history=conversation_history,
-                                    user_id=user_id
-                                )
-
-                                # Extract response and tool calls
-                                response_text = agent_response.get("response", "")
-                                tool_calls = agent_response.get("tool_calls", [])
-
-                                # Process tool calls if any
-                                for tool_call in tool_calls:
-                                    tool_name = tool_call["name"]
-                                    parameters = tool_call["arguments"]
-
-                                    # Call the actual tools through the backend service
-                                    from services.todo_tools import TodoTools
-                                    todo_tools = TodoTools(db_session)
-
-                                    try:
-                                        if tool_name == "add_task":
-                                            result = todo_tools.add_task(**parameters)
-                                        elif tool_name == "list_tasks":
-                                            result = todo_tools.list_tasks(**parameters)
-                                        elif tool_name == "update_task":
-                                            result = todo_tools.update_task(**parameters)
-                                        elif tool_name == "complete_task":
-                                            result = todo_tools.complete_task(**parameters)
-                                        elif tool_name == "delete_task":
-                                            result = todo_tools.delete_task(**parameters)
-                                        else:
-                                            result = {"success": False, "error": f"Unknown tool: {tool_name}"}
-                                    except Exception as e:
-                                        result = {"success": False, "error": str(e)}
-
-                                # Add user and assistant messages to conversation
-                                chat_service.add_message_to_conversation(
-                                    conversation_id=conversation.id,
-                                    role="user",
-                                    content=content
-                                )
-
-                                chat_service.add_message_to_conversation(
-                                    conversation_id=conversation.id,
-                                    role="assistant",
-                                    content=response_text,
-                                    metadata={"tool_calls": [tc["name"] for tc in tool_calls]}
-                                )
-
-                                # Send the AI response back to the client
-                                await websocket.send_text(json.dumps({
-                                    "type": "message_received",
-                                    "content": response_text,
-                                    "thread_id": thread_id,
-                                    "tool_calls": tool_calls
-                                }))
-                            finally:
-                                db_session.close()
-                        except Exception as e:
-                            # Send error message back to client
-                            await websocket.send_text(json.dumps({
-                                "type": "message_error",
-                                "error": str(e),
-                                "thread_id": thread_id
-                            }))
-
-        except WebSocketDisconnect:
-            print(f"WebSocket disconnected for user {user_id}")
-        finally:
-            db.close()
-
-    except WebSocketDisconnect:
-        print("Client disconnected")
-
-
-@router.get("/health")
-async def chatkit_health():
-    """Health check for ChatKit endpoint"""
-    return {"status": "ok", "service": "chatkit"}
-
-
-# Additional REST endpoints for ChatKit protocol if needed
-@router.post("/threads")
-async def create_thread(
-    request: dict,
-    token: HTTPAuthorizationCredentials = Depends(security)
+@router.post("/chatkit")
+async def chatkit_endpoint(
+    request: Request,
+    current_user: str = Depends(get_current_user)
 ):
-    """REST endpoint to create a new thread"""
-    user_data = auth_service.verify_token(token.credentials)
-    if not user_data:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    """
+    Official ChatKit streaming endpoint.
 
-    user_id = user_data.get("user_id")
+    Handles ChatKit protocol requests and streams responses using Server-Sent Events.
 
-    db = Session(engine)
+    Expected request format:
+    {
+        "thread_id": "optional-conversation-id",
+        "message": "user message"
+    }
+
+    Returns:
+        StreamingResponse with text/event-stream content type
+    """
+    async def event_stream():
+        """Generator function that yields SSE events."""
+        try:
+            # Get raw request body
+            request_body = await request.body()
+
+            # Build context from authenticated user
+            context = {"user_id": current_user}
+
+            # Process request through ChatKit server and yield SSE events
+            async for event in chatkit_server.process_request(request_body, context):
+                yield event
+
+        except Exception as e:
+            # Send error event
+            import json
+            error_data = json.dumps({"error": str(e)})
+            yield f"event: error\ndata: {error_data}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
+
+
+@router.get("/chatkit/health")
+async def chatkit_health_check():
+    """Health check endpoint for ChatKit service."""
+    return {
+        "status": "healthy",
+        "service": "chatkit",
+        "server": "TodoChatKitServer",
+        "protocol": "SSE"
+    }
+
+
+@router.get("/chatkit/history")
+async def get_conversation_history(
+    thread_id: Optional[str] = Query(None, description="Thread/conversation ID"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of items"),
+    current_user: str = Depends(get_current_user)
+):
+    """
+    Get conversation history for a thread.
+
+    Args:
+        thread_id: The conversation/thread ID to fetch history for
+        limit: Maximum number of messages to return
+        current_user: Authenticated user ID (injected)
+
+    Returns:
+        {
+            "items": [...messages...],
+            "has_more": false
+        }
+    """
     try:
-        server = TodoChatKitServer(db)
-        thread_metadata = await server.create_thread(
-            user_id=user_id,
-            initial_messages=request.get("initial_messages"),
-            metadata=request.get("metadata")
+        if not thread_id:
+            raise HTTPException(
+                status_code=400,
+                detail="thread_id is required"
+            )
+
+        # Load thread items from the ChatKit store
+        context = {"user_id": current_user}
+        result = await chatkit_server.store.load_thread_items(
+            thread_id=thread_id,
+            limit=limit,
+            order="asc",
+            context=context
         )
 
-        return {"thread": thread_metadata.dict()}
-    finally:
-        db.close()
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load conversation history: {str(e)}"
+        )
 
 
-@router.get("/threads")
-async def list_threads(
-    token: HTTPAuthorizationCredentials = Depends(security)
+@router.get("/chatkit/conversations")
+async def list_conversations(
+    current_user: str = Depends(get_current_user)
 ):
-    """REST endpoint to list user's threads"""
-    user_data = auth_service.verify_token(token.credentials)
-    if not user_data:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    """
+    List all conversations for the current user.
 
-    user_id = user_data.get("user_id")
-
-    db = Session(engine)
+    Returns:
+        List of conversations with thread_id, title, and metadata
+    """
     try:
-        server = TodoChatKitServer(db)
-        threads = await server.list_threads(user_id=user_id)
+        from database.session import get_session_context
+        from database.models.conversation import Conversation
+        from sqlmodel import select
 
-        return {"threads": [t.dict() for t in threads]}
-    finally:
-        db.close()
+        with get_session_context() as session:
+            # Get all conversations for this user
+            statement = select(Conversation).where(
+                Conversation.user_id == current_user
+            ).order_by(Conversation.updated_at.desc())
 
+            conversations = session.exec(statement).all()
 
-@router.get("/threads/{thread_id}")
-async def get_thread(
-    thread_id: str,
-    token: HTTPAuthorizationCredentials = Depends(security)
-):
-    """REST endpoint to get a specific thread"""
-    user_data = auth_service.verify_token(token.credentials)
-    if not user_data:
-        raise HTTPException(status_code=401, detail="Invalid token")
+            # Format for response
+            result = []
+            for conv in conversations:
+                result.append({
+                    "id": conv.id,
+                    "thread_id": conv.id,
+                    "title": conv.title or "New Conversation",
+                    "created_at": conv.created_at.isoformat() if conv.created_at else None,
+                    "updated_at": conv.updated_at.isoformat() if conv.updated_at else None
+                })
 
-    # Verify user has access to this thread
-    db = Session(engine)
-    try:
-        server = TodoChatKitServer(db)
-        thread = await server.get_thread(thread_id)
+            return {"items": result}
 
-        if not thread:
-            raise HTTPException(status_code=404, detail="Thread not found")
-
-        return {"thread": thread.dict()}
-    finally:
-        db.close()
-
-
-@router.get("/threads/{thread_id}/messages")
-async def list_messages(
-    thread_id: str,
-    limit: Optional[int] = 20,
-    before: Optional[str] = None,
-    token: HTTPAuthorizationCredentials = Depends(security)
-):
-    """REST endpoint to list messages in a thread"""
-    user_data = auth_service.verify_token(token.credentials)
-    if not user_data:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    db = Session(engine)
-    try:
-        server = TodoChatKitServer(db)
-        messages = await server.list_items(thread_id, before=before, limit=limit)
-
-        return {"messages": [msg.dict() for msg in messages]}
-    finally:
-        db.close()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list conversations: {str(e)}"
+        )

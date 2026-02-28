@@ -52,12 +52,13 @@ class ChatService:
 
         Args:
             user_id: The ID of the user
-            conversation_id: Optional existing conversation ID
+            conversation_id: Optional existing conversation ID (treats "default" as None)
 
         Returns:
             The Conversation object
         """
-        if conversation_id:
+        # Treat "default" as a sentinel value meaning "create new conversation"
+        if conversation_id and conversation_id != "default":
             conversation = self.get_conversation_by_id(conversation_id)
             if not conversation:
                 raise ValueError(f"Conversation with ID {conversation_id} not found")

@@ -66,3 +66,10 @@ next-env.d.ts
 
 # Project specific
 .specify/memory/session-state.json
+
+# Secrets and sensitive data
+k8s/*secrets*.yaml
+k8s/04-secrets.yaml
+*.env.local
+phase_*/backend/.env
+phase_*/backend/.env.local

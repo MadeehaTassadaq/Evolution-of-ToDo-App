@@ -1,13 +1,16 @@
+"""
+API Router - Main router for all API endpoints
+"""
 from fastapi import APIRouter
-from .v1.chat import router as chat_router
-from .v1.auth import router as auth_router
-from .v1.chatkit import router as chatkit_router
+from api.v1 import chat, auth, chatkit, chatkit_session, tools
 
-
-# Create main API router
+# Create main router
 router = APIRouter()
 
-# Include all API version routers
-router.include_router(chat_router, prefix="/v1", tags=["chat"])
-router.include_router(auth_router, prefix="/v1", tags=["auth"])
-router.include_router(chatkit_router, prefix="/v1", tags=["chatkit"])
+# Include v1 routers
+router.include_router(chat.router, prefix="/v1", tags=["chat"])
+router.include_router(auth.router, prefix="/v1", tags=["auth"])
+router.include_router(chatkit.router, prefix="/v1", tags=["chatkit"])
+router.include_router(tools.router, prefix="/v1", tags=["tools"])
+# ChatKit session endpoint (no /v1 prefix - accessed directly at /api/chatkit/session)
+router.include_router(chatkit_session.router, tags=["chatkit-session"])
