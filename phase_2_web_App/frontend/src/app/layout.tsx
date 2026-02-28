@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import ClientWrapper from "../components/ClientWrapper";
 import ChatKitOfficialWidget from "../components/ChatKitOfficialWidget";
+import { ChatKitErrorBoundary } from "../components/ChatKitErrorBoundary";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -30,7 +32,14 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="font-sans antialiased bg-black text-white" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
         <ClientWrapper>{children}</ClientWrapper>
-        <ChatKitOfficialWidget />
+        <ChatKitErrorBoundary>
+          <ChatKitOfficialWidget />
+        </ChatKitErrorBoundary>
+        {/* Load ChatKit Web Component from CDN */}
+        <Script
+          src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );

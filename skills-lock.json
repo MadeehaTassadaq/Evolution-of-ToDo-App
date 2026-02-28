@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "chatkit-python": {
+      "source": "naimalarain13/hackathon-ii_the-evolution-of-todo",
+      "sourceType": "github",
+      "computedHash": "7b46f92306018b95fa03fcbf955d9a26c6170f3bbb0c62ebb40de75c8e732b2c"
+    }
+  }
+}

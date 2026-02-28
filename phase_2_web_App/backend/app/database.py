@@ -31,6 +31,8 @@ def create_db_and_tables():
     # Import models to register them with SQLModel
     from app.models.user import User
     from app.models.task import Task
+    from app.models.conversation import Conversation
+    from app.models.message import Message
     SQLModel.metadata.create_all(engine)
 
 def get_session():
