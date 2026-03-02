@@ -55,9 +55,15 @@ import { ChatKit, useChatKit } from '@openai/chatkit-react';
 // For Hugging Face Spaces: https://madeeha123-fastapi.hf.space (configured in Vercel)
 const CHATKIT_BACKEND_URL = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:7860';
 
-// Full API URL for the ChatKit endpoint
-// Our custom backend implements the ChatKit protocol using Python SDK
-const CHATKIT_API_URL = `${CHATKIT_BACKEND_URL}/api/v1/chatkit`;
+// Helper to get auth token and build URL with query parameter
+const getChatKitApiUrl = (): string => {
+  const token = getToken();
+  const baseUrl = `${CHATKIT_BACKEND_URL}/api/v1/chatkit`;
+  if (token) {
+    return `${baseUrl}?token=${encodeURIComponent(token)}`;
+  }
+  return baseUrl;
+};
 
 // Domain Key for ChatKit widget (required for domain validation)
 // Even with custom backend, widget needs domainKey for security
@@ -89,18 +95,21 @@ function ChatKitAuthenticatedWidget() {
   useEffect(() => {
     console.log('[ChatKit Widget] ================================================');
     console.log('[ChatKit Widget] Using Custom Backend (ChatKit Python SDK)');
-    console.log('[ChatKit Widget] Backend URL:', CHATKIT_API_URL);
+    console.log('[ChatKit Widget] Backend URL:', getChatKitApiUrl());
     console.log('[ChatKit Widget] Auth Token:', !!getToken());
     console.log('[ChatKit Widget] Current URL:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
     console.log('[ChatKit Widget] ================================================');
   }, []);
+
+  // Get auth token for API requests
+  const authToken = getToken();
 
   const chatKit = useChatKit({
     // Custom Backend Configuration (ChatKit Python SDK on Hugging Face Spaces)
     // This uses our custom backend running the ChatKit Python SDK
     // The backend handles AI processing and tool execution server-side
     api: {
-      url: CHATKIT_API_URL,
+      url: getChatKitApiUrl(), // Dynamic URL with auth token as query parameter
       domainKey: CHATKIT_DOMAIN_KEY,
     },
 

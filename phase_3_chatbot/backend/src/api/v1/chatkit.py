@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
 
-from services.auth_service import get_current_user
+from services.auth_service import get_current_user, get_current_user_optional
 from services.chatkit_server import chatkit_server
 
 router = APIRouter()
@@ -18,7 +18,7 @@ router = APIRouter()
 @router.post("/chatkit")
 async def chatkit_endpoint(
     request: Request,
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_user_optional)
 ):
     """
     Official ChatKit streaming endpoint.
