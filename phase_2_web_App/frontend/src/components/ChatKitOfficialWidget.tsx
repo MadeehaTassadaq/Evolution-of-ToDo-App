@@ -92,6 +92,8 @@ const getInitialThreadId = (): string | null => {
  * Inner component that only renders when authenticated
  */
 function ChatKitAuthenticatedWidget() {
+  const [isWidgetOpen, setIsWidgetOpen] = useState(false);
+
   useEffect(() => {
     console.log('[ChatKit Widget] ================================================');
     console.log('[ChatKit Widget] Using Custom Backend (ChatKit Python SDK)');
@@ -100,9 +102,6 @@ function ChatKitAuthenticatedWidget() {
     console.log('[ChatKit Widget] Current URL:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
     console.log('[ChatKit Widget] ================================================');
   }, []);
-
-  // Get auth token for API requests
-  const authToken = getToken();
 
   const chatKit = useChatKit({
     // Custom Backend Configuration (ChatKit Python SDK on Hugging Face Spaces)
@@ -245,18 +244,26 @@ function ChatKitAuthenticatedWidget() {
 
   // Fixed position widget in bottom-right corner
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] w-auto h-auto">
-      {/* Fallback visible button for debugging */}
+    <>
+      {/* Floating Chat Button */}
       <button
-        onClick={() => console.log('[ChatKit Widget] Button clicked - widget should be visible')}
-        className="absolute bottom-0 right-0 w-14 h-14 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl font-bold z-[10000]"
-        title="Click to open AI Assistant"
-        style={{ display: 'none' }} // Hidden by default, use if ChatKit is not visible
+        onClick={() => setIsWidgetOpen(!isWidgetOpen)}
+        className="fixed bottom-6 right-6 z-[9999] w-14 h-14 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+        title={isWidgetOpen ? "Close AI Assistant" : "Open AI Assistant"}
+        style={{
+          boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)',
+        }}
       >
-        🤖
+        {isWidgetOpen ? '✕' : '🤖'}
       </button>
-      <ChatKit control={chatKit.control} />
-    </div>
+
+      {/* ChatKit Widget Panel (shown when open) */}
+      {isWidgetOpen && (
+        <div className="fixed bottom-24 right-6 z-[9998] w-[400px] max-w-[calc(100vw-3rem)] h-[600px] max-h-[calc(100vh-6rem)]">
+          <ChatKit control={chatKit.control} className="h-full w-full" />
+        </div>
+      )}
+    </>
   );
 }
 
