@@ -1,22 +1,22 @@
 'use client';
 
 /**
- * Official OpenAI ChatKit Widget - Hosted Backend with Client Tools
+ * Official OpenAI ChatKit Widget - Custom Backend with ChatKit Python SDK
  *
- * This uses the official @openai/chatkit-react package with OpenAI's HOSTED backend.
- * Custom tool execution is handled via onClientTool callback to our FastAPI backend.
+ * This uses the official @openai/chatkit-react package with a CUSTOM backend
+ * running the ChatKit Python SDK (deployed on Hugging Face Spaces).
  *
  * =============================================================================
  * ARCHITECTURE:
  * =============================================================================
  *
  * Frontend (ChatKit Widget)
- *     ↓ HTTPS (OpenAI Hosted)
- * OpenAI ChatKit Service (api.openai.com/chatkit/v1)
- *     ↓ onClientTool callback
- * Custom Backend (FastAPI @ http://localhost:7860/api/v1/tools/execute)
+ *     ↓ HTTPS/WSS
+ * Custom Backend (FastAPI + ChatKit Python SDK @ Hugging Face Spaces)
  *     ↓
- * PostgreSQL Database (via TodoTools service)
+ * OpenAI Agents SDK (AI processing + Tool execution)
+ *     ↓
+ * PostgreSQL Database (via Neon)
  *
  * =============================================================================
  * ENVIRONMENT SETUP:
@@ -24,39 +24,21 @@
  *
  * Set in phase_2_web_App/frontend/.env.local:
  *
- * # ChatKit backend URL (for tool execution only)
+ * # ChatKit Custom Backend URL (Hugging Face Spaces)
+ * # Local development: http://localhost:7860
+ * # Production: https://your-space-name.hf.space
  * NEXT_PUBLIC_CHATKIT_BACKEND_URL=http://localhost:7860
  *
- * # OpenAI Domain Key (registered for madeehatassadaq.github.io)
- * NEXT_PUBLIC_OPENAI_DOMAIN_KEY=domain_pk_699dd137050c8194b8ac6b936da88aa408d6ecf59a4d7a47
- *
  * =============================================================================
- * IMPORTANT: BOTH BACKENDS MUST BE RUNNING:
+ * DEPLOYMENT:
  * =============================================================================
  *
- * Terminal 1: Phase II Todo Backend (port 8000)
- *   cd phase_2_web_App/backend && python app.py
+ * For Vercel deployment:
+ * 1. Deploy backend to Hugging Face Spaces
+ * 2. Set NEXT_PUBLIC_CHATKIT_BACKEND_URL to your Hugging Face Space URL
+ * 3. NO domain key needed (custom backend handles authentication)
  *
- * Terminal 2: Phase III ChatBot Backend (port 7860)
- *   cd phase_3_chatbot/backend && python main.py
- *
- * Terminal 3: Frontend (port 3000/3001)
- *   cd phase_2_web_App/frontend && npm run dev
- *
- * =============================================================================
- * HOW IT WORKS:
- * =============================================================================
- *
- * 1. User types message in ChatKit widget
- * 2. Widget sends request to OpenAI's hosted ChatKit service
- * 3. OpenAI processes with AI and determines if tools are needed
- * 4. If tools needed, widget's onClientTool is called
- * 5. onClientTool calls our backend at /api/v1/tools/execute
- * 6. Backend executes tool and returns result
- * 7. Result sent back to OpenAI to format response
- * 8. User sees final response in widget
- *
- * @see https://openai.github.io/chatkit-js/
+ * @see https://github.com/openai/chatkit-python
  */
 
 import { useState, useEffect } from 'react';
@@ -69,13 +51,13 @@ import { ChatKit, useChatKit } from '@openai/chatkit-react';
 
 // Custom ChatKit backend URL (FastAPI + ChatKit Python SDK)
 // This is our custom backend - NOT OpenAI's hosted service
-const CHATKIT_BACKEND_URL = process.env.NEXT_PUBLIC_CHATKIT_BACKEND_URL || 'http://localhost:7860';
+// For local: http://localhost:7860
+// For Hugging Face Spaces: https://madeeha123-fastapi.hf.space (configured in Vercel)
+const CHATKIT_BACKEND_URL = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:7860';
 
 // Full API URL for the ChatKit endpoint
+// Our custom backend implements the ChatKit protocol using Python SDK
 const CHATKIT_API_URL = `${CHATKIT_BACKEND_URL}/api/v1/chatkit`;
-
-// OpenAI Domain Key (registered for evolution-of-to-do-app-bafm.vercel.app)
-const CHATKIT_DOMAIN_KEY = process.env.NEXT_PUBLIC_OPENAI_DOMAIN_KEY || 'domain_pk_696a62eeaf508197aedf5220ff381cc906aff41e18fc2ffc';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -101,23 +83,24 @@ const getInitialThreadId = (): string | null => {
 function ChatKitAuthenticatedWidget() {
   useEffect(() => {
     console.log('[ChatKit Widget] ================================================');
-    console.log('[ChatKit Widget] Using OpenAI-Hosted Backend with Client Tools');
-    console.log('[ChatKit Widget] Tool Execution Backend:', CHATKIT_BACKEND_URL);
+    console.log('[ChatKit Widget] Using Custom Backend (ChatKit Python SDK)');
+    console.log('[ChatKit Widget] Backend URL:', CHATKIT_API_URL);
     console.log('[ChatKit Widget] Auth Token:', !!getToken());
     console.log('[ChatKit Widget] Current URL:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
     console.log('[ChatKit Widget] ================================================');
   }, []);
 
   const chatKit = useChatKit({
-    // OpenAI-Hosted Backend Configuration
-    // This uses OpenAI's hosted ChatKit service, which handles domain validation
-    // Our custom backend is called via onClientTool for tool execution
+    // Custom Backend Configuration (ChatKit Python SDK on Hugging Face Spaces)
+    // This uses our custom backend running the ChatKit Python SDK
+    // The backend handles AI processing and tool execution server-side
     api: {
-      url: "https://api.openai.com/chatkit/v1",
-      domainKey: CHATKIT_DOMAIN_KEY,
+      url: CHATKIT_API_URL,
     },
 
-    // Client Tool Handler - calls our custom backend for tool execution
+    // Client Tool Handler - NOT NEEDED with custom backend
+    // The ChatKit Python SDK backend handles tool execution server-side
+    // Kept for compatibility but won't be called with custom backend
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
       console.log('[ChatKit Widget] Client tool invocation:', invocation);
 
@@ -201,14 +184,14 @@ function ChatKitAuthenticatedWidget() {
 
       // Check for backend connectivity issues
       if (error.message?.includes('fetch') || error.message?.includes('network')) {
-        console.error('[ChatKit Widget] Cannot connect to tool execution backend at:', CHATKIT_BACKEND_URL);
-        console.error('[ChatKit Widget] Make sure the backend is running: cd phase_3_chatbot/backend && python main.py');
+        console.error('[ChatKit Widget] Cannot connect to ChatKit backend at:', CHATKIT_API_URL);
+        console.error('[ChatKit Widget] Make sure the backend is running and accessible');
       }
     },
 
     // Ready handler
     onReady: () => {
-      console.log('[ChatKit Widget] Widget is ready and connected to OpenAI-hosted backend!');
+      console.log('[ChatKit Widget] Widget is ready and connected to custom backend!');
     },
   });
 
