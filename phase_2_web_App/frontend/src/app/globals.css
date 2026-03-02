@@ -266,3 +266,70 @@ body {
   background: var(--chatkit-bg-hover) !important;
 }
 
+/* ========================================
+   ChatKit Widget Container (openai-chatkit)
+   ======================================== */
+
+/* Ensure the ChatKit custom element is visible */
+openai-chatkit,
+openai-chatkit *,
+chatkit-widget,
+[is="openai-chatkit"] {
+  display: contents !important;
+}
+
+/* ChatKit widget container styling */
+.chatkit-widget-container,
+openai-chatkit > *,
+[is="openai-chatkit"] > * {
+  position: relative !important;
+  z-index: 9999 !important;
+}
+
+/* ChatKit floating button/trigger */
+.chatkit-trigger,
+.chatkit-toggle,
+openai-chatkit::part(trigger),
+openai-chatkit::part(button) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px !important;
+  min-height: 56px !important;
+  background: var(--chatkit-accent) !important;
+  border-radius: 50% !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.chatkit-trigger:hover,
+.chatkit-toggle:hover,
+openai-chatkit::part(trigger):hover {
+  transform: scale(1.1) !important;
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.5) !important;
+}
+
+/* ChatKit panel/dialog */
+.chatkit-panel,
+.chatkit-dialog,
+openai-chatkit::part(panel),
+openai-chatkit::part(dialog) {
+  position: fixed !important;
+  bottom: 6rem !important;
+  right: 1.5rem !important;
+  width: 400px !important;
+  max-width: calc(100vw - 3rem) !important;
+  height: 600px !important;
+  max-height: calc(100vh - 3rem) !important;
+  background: var(--chatkit-bg-primary) !important;
+  border: 1px solid var(--chatkit-border-color) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+  z-index: 9999 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+

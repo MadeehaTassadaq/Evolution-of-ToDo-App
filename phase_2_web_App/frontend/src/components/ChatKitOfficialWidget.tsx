@@ -207,12 +207,54 @@ function ChatKitAuthenticatedWidget() {
     // Ready handler
     onReady: () => {
       console.log('[ChatKit Widget] Widget is ready and connected to custom backend!');
+
+      // Debug: Check if ChatKit element is in DOM
+      setTimeout(() => {
+        const chatkitElements = document.querySelectorAll('openai-chatkit, [data-chatkit], .chatkit-widget');
+        console.log('[ChatKit Widget] Debug - ChatKit elements found:', chatkitElements.length);
+        chatkitElements.forEach((el, i) => {
+          console.log(`[ChatKit Widget] Debug - Element ${i}:`, {
+            tagName: el.tagName,
+            className: el.className,
+            id: el.id,
+            display: window.getComputedStyle(el).display,
+            visibility: window.getComputedStyle(el).visibility,
+            opacity: window.getComputedStyle(el).opacity,
+            zIndex: window.getComputedStyle(el).zIndex,
+          });
+        });
+
+        // Check all fixed positioned elements
+        const fixedElements = Array.from(document.querySelectorAll('*')).filter(
+          el => window.getComputedStyle(el).position === 'fixed'
+        );
+        console.log('[ChatKit Widget] Debug - Fixed positioned elements:', fixedElements.length);
+        const bottomRightElements = fixedElements.filter(el => {
+          const style = window.getComputedStyle(el);
+          return style.bottom.includes('rem') || style.bottom.includes('px');
+        });
+        console.log('[ChatKit Widget] Debug - Bottom-right positioned elements:', bottomRightElements.map(el => ({
+          tagName: el.tagName,
+          className: el.className,
+          bottom: window.getComputedStyle(el).bottom,
+          right: window.getComputedStyle(el).right,
+        })));
+      }, 1000);
     },
   });
 
   // Fixed position widget in bottom-right corner
   return (
-    <div className="fixed bottom-6 right-6 z-[9999]">
+    <div className="fixed bottom-6 right-6 z-[9999] w-auto h-auto">
+      {/* Fallback visible button for debugging */}
+      <button
+        onClick={() => console.log('[ChatKit Widget] Button clicked - widget should be visible')}
+        className="absolute bottom-0 right-0 w-14 h-14 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl font-bold z-[10000]"
+        title="Click to open AI Assistant"
+        style={{ display: 'none' }} // Hidden by default, use if ChatKit is not visible
+      >
+        🤖
+      </button>
       <ChatKit control={chatKit.control} />
     </div>
   );
