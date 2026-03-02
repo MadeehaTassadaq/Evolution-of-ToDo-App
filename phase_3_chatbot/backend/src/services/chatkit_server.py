@@ -250,6 +250,8 @@ class TodoChatKitServer:
         """
         from agents.todo_agent import TodoAgent
 
+        logger.info(f"=== Processing message: user_message='{user_message}', user_id='{user_id}' ===")
+
         agent = TodoAgent()
 
         # Process message with agent
@@ -259,8 +261,12 @@ class TodoChatKitServer:
             user_id=user_id
         )
 
+        logger.info(f"=== Agent response: {agent_response} ===")
+
         response_text = agent_response.get("response", "")
         tool_calls = agent_response.get("tool_calls", [])
+
+        logger.info(f"=== response_text: '{response_text}', tool_calls count: {len(tool_calls)} ===")
 
         # Execute tool calls if any
         for tool_call in tool_calls:
