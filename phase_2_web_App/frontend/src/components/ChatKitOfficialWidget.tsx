@@ -59,6 +59,11 @@ const CHATKIT_BACKEND_URL = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://l
 // Our custom backend implements the ChatKit protocol using Python SDK
 const CHATKIT_API_URL = `${CHATKIT_BACKEND_URL}/api/v1/chatkit`;
 
+// Domain Key for ChatKit widget (required for domain validation)
+// Even with custom backend, widget needs domainKey for security
+// Registered for: evolution-of-to-do-app-bafm.vercel.app
+const CHATKIT_DOMAIN_KEY = process.env.NEXT_PUBLIC_OPENAI_DOMAIN_KEY || 'domain_pk_696a62eeaf508197aedf5220ff381cc906aff41e18fc2ffc';
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -96,6 +101,7 @@ function ChatKitAuthenticatedWidget() {
     // The backend handles AI processing and tool execution server-side
     api: {
       url: CHATKIT_API_URL,
+      domainKey: CHATKIT_DOMAIN_KEY,
     },
 
     // Client Tool Handler - NOT NEEDED with custom backend
