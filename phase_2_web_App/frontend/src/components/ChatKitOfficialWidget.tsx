@@ -74,8 +74,8 @@ const CHATKIT_BACKEND_URL = process.env.NEXT_PUBLIC_CHATKIT_BACKEND_URL || 'http
 // Full API URL for the ChatKit endpoint
 const CHATKIT_API_URL = `${CHATKIT_BACKEND_URL}/api/v1/chatkit`;
 
-// OpenAI Domain Key (registered for madeehatassadaq.github.io)
-const CHATKIT_DOMAIN_KEY = process.env.NEXT_PUBLIC_OPENAI_DOMAIN_KEY || 'domain_pk_699dd137050c8194b8ac6b936da88aa408d6ecf59a4d7a47';
+// OpenAI Domain Key (registered for evolution-of-to-do-app-bafm.vercel.app)
+const CHATKIT_DOMAIN_KEY = process.env.NEXT_PUBLIC_OPENAI_DOMAIN_KEY || 'domain_pk_696a62eeaf508197aedf5220ff381cc906aff41e18fc2ffc';
 
 // ============================================================================
 // HELPER FUNCTIONS
