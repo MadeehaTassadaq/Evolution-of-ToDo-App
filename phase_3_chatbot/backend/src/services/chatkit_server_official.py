@@ -281,14 +281,17 @@ class TodoChatKitServer(ChatKitServer[Dict[str, Any]]):
         # If no message, send greeting
         if not user_message_text:
             greeting = "Hi! I can help you manage your todos. What would you like to do?"
-            yield ThreadItemDoneEvent(
-                item=AssistantMessageItem(
-                    id=self.store.generate_item_id(thread, context),
-                    thread_id=thread.id,
-                    created_at=datetime.now(),
-                    content=[{"type": "text", "text": greeting}],
-                )
+            item_id = self.store.generate_item_id(thread, context)
+            greeting_item = AssistantMessageItem(
+                id=item_id,
+                thread_id=thread.id,
+                created_at=datetime.now(),
+                content=[{"type": "text", "text": greeting}],
             )
+            # First yield the item (adds to UI)
+            yield greeting_item
+            # Then yield the done event (marks as complete)
+            yield ThreadItemDoneEvent(item=greeting_item)
             return
 
         # Process with agent
@@ -362,14 +365,22 @@ class TodoChatKitServer(ChatKitServer[Dict[str, Any]]):
         if not response_text:
             response_text = "I've processed your request. Is there anything else you'd like me to help you with?"
 
-        # Yield the assistant response
+        # Create the assistant message item
+        item_id = self.store.generate_item_id(thread, context)
+        assistant_item = AssistantMessageItem(
+            id=item_id,
+            thread_id=thread.id,
+            created_at=datetime.now(),
+            content=[{"type": "text", "text": response_text}],
+        )
+
+        # First yield the item added event (this adds the message to the UI)
+        # The ChatKit SDK will automatically convert this to the proper event format
+        yield assistant_item
+
+        # Then yield the done event to mark the message as complete
         yield ThreadItemDoneEvent(
-            item=AssistantMessageItem(
-                id=self.store.generate_item_id(thread, context),
-                thread_id=thread.id,
-                created_at=datetime.now(),
-                content=[{"type": "text", "text": response_text}],
-            )
+            item=assistant_item
         )
 
 
