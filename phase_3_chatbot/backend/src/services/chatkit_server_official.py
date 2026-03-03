@@ -3,6 +3,8 @@ Official ChatKit Server Implementation using the ChatKit Python SDK
 
 This implementation uses the official OpenAI ChatKit Python SDK
 for proper protocol handling with @openai/chatkit-react.
+
+Integrates with the MCP server for todo tool execution.
 """
 
 import logging
@@ -23,6 +25,7 @@ from chatkit.store import Store
 from database.session import get_session_context
 from services.chat_service import ChatService
 from agents.todo_agent import TodoAgent
+from mcp_tools.server import TodoMCPServer
 
 logger = logging.getLogger(__name__)
 
@@ -221,14 +224,16 @@ class TodoChatKitServer(ChatKitServer[Dict[str, Any]]):
     ChatKit Server for Todo AI Chatbot using the official SDK.
 
     This server integrates with the TodoAgent to process natural language
-    requests and perform todo operations via Phase II API.
+    requests and perform todo operations via the MCP server.
     """
 
     def __init__(self):
-        """Initialize the ChatKit server with PostgreSQL store."""
+        """Initialize the ChatKit server with PostgreSQL store and MCP server."""
         store = ChatKitPostgresStore()
         super().__init__(store=store)
         self.agent = TodoAgent()
+        self.mcp_server = TodoMCPServer()  # Connect MCP server
+        logger.info("[TodoChatKitServer] Initialized with MCP server")
 
     async def respond(
         self,
@@ -306,55 +311,61 @@ class TodoChatKitServer(ChatKitServer[Dict[str, Any]]):
 
         logger.info(f"[TodoChatKitServer] Agent response: '{response_text[:100]}', tools: {len(tool_calls)}")
 
-        # Execute tool calls if any
+        # Execute tool calls using MCP server
         for tool_call in tool_calls:
             tool_name = tool_call.get("name")
             parameters = tool_call.get("arguments", {})
 
+            # Add user_id to parameters for MCP server
+            parameters["user_id"] = user_id
+
+            logger.info(f"[TodoChatKitServer] Executing MCP tool: {tool_name} with params: {parameters}")
+
             try:
-                from services.todo_tools import TodoTools
-
-                # Create TodoTools with access_token for Phase II API authentication
-                todo_tools = TodoTools(session=None, access_token=access_token)
-
-                # Call the appropriate tool
-                if tool_name == "add_task":
-                    result = todo_tools.add_task(**parameters)
-                elif tool_name == "list_tasks":
-                    result = todo_tools.list_tasks(**parameters)
-                elif tool_name == "update_task":
-                    result = todo_tools.update_task(**parameters)
-                elif tool_name == "complete_task":
-                    result = todo_tools.complete_task(**parameters)
-                elif tool_name == "delete_task":
-                    result = todo_tools.delete_task(**parameters)
-                else:
+                # Get the tool handler from MCP server
+                tool_def = self.mcp_server.get_tool(tool_name)
+                if not tool_def:
                     result = {"success": False, "error": f"Unknown tool: {tool_name}"}
+                else:
+                    # Call the MCP server's tool handler (async)
+                    import asyncio
+                    result = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: tool_def.handler(**parameters)
+                    )
+
+                logger.info(f"[TodoChatKitServer] MCP tool result: {result}")
 
                 # Format result into response
-                if result.get("success"):
-                    if "tasks" in result:
-                        # List of tasks returned
-                        tasks = result.get("tasks", [])
-                        if not tasks:
-                            response_text = "You don't have any tasks yet."
-                        else:
-                            items_text = "\n".join([
-                                f"- {item.get('title', 'Untitled')}: {item.get('status', 'pending')}"
-                                for item in tasks
-                            ])
-                            response_text = f"Here are your tasks:\n{items_text}"
-                    elif "task" in result:
-                        # Single task returned
-                        task = result["task"]
-                        response_text = f"Task: {task.get('title', 'Untitled')} - {task.get('status', 'pending')}"
+                # MCP server returns different format than TodoTools
+                if "tasks" in result:
+                    # List of tasks returned
+                    tasks = result.get("tasks", [])
+                    if not tasks:
+                        response_text = "You don't have any tasks yet."
+                    else:
+                        items_text = "\n".join([
+                            f"- {item.get('title', 'Untitled')}: {item.get('status', 'pending')}"
+                            for item in tasks
+                        ])
+                        response_text = f"Here are your tasks:\n{items_text}"
+                elif "task_id" in result:
+                    # Single task operation result
+                    if tool_name == "add_task":
+                        response_text = result.get("message", f"Task '{result.get('title', '')}' added successfully!")
+                    elif tool_name == "complete_task":
+                        response_text = result.get("message", f"Task '{result.get('title', '')}' marked as complete!")
+                    elif tool_name == "update_task":
+                        response_text = result.get("message", f"Task '{result.get('title', '')}' updated successfully!")
                     else:
                         response_text = result.get("message", "Action completed successfully!")
+                elif "deleted_count" in result:
+                    # Delete operation result
+                    response_text = result.get("message", f"Deleted {result.get('deleted_count', 0)} task(s)")
                 else:
-                    response_text = f"Error: {result.get('error_message', result.get('error', 'Unknown error'))}"
+                    response_text = result.get("message", "Action completed successfully!")
 
             except Exception as e:
-                logger.exception(f"[TodoChatKitServer] Error executing tool {tool_name}")
+                logger.exception(f"[TodoChatKitServer] Error executing MCP tool {tool_name}")
                 response_text = f"Sorry, I encountered an error: {str(e)}"
 
         # If there's response text, return it
