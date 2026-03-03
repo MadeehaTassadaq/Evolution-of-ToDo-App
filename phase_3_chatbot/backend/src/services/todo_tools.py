@@ -1,103 +1,43 @@
 """
 Todo Tools for Backend Operations
-Database-backed tools for todo management operations that can be used by the backend
-without MCP server dependencies.
+
+Bridges Phase III chatbot to Phase II's REST API for todo management.
+Uses HTTP calls to Phase II backend instead of direct database access.
 """
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
+from uuid import UUID
 
 # Configure logging for debugging
 logger = logging.getLogger(__name__)
-from pydantic import BaseModel
-from uuid import UUID
-from database.models.todo import Todo, TodoCreate, TodoUpdate
-from .todo_service import TodoService
 
-
-class TodoItem(BaseModel):
-    """Represents a todo item."""
-    id: UUID
-    title: str
-    description: Optional[str] = None
-    status: str = "pending"  # "pending", "completed"
-    priority: Optional[str] = None
-    due_date: Optional[str] = None
-    user_id: UUID
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-
-class AddTaskParams(BaseModel):
-    """Parameters for add_task tool."""
-    user_id: str  # Will be converted to UUID
-    title: str
-    description: Optional[str] = None
-    due_date: Optional[str] = None
-
-
-class ListTasksParams(BaseModel):
-    """Parameters for list_tasks tool."""
-    user_id: str  # Will be converted to UUID
-    status_filter: Optional[str] = None  # "all", "pending", "completed"
-
-
-class UpdateTaskParams(BaseModel):
-    """Parameters for update_task tool."""
-    user_id: str  # Will be converted to UUID
-    task_id: Optional[UUID] = None  # Optional - can use task_title instead
-    task_title: Optional[str] = None  # Optional - natural language lookup
-    title: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[str] = None
-    priority: Optional[str] = None
-    due_date: Optional[str] = None
-
-
-class CompleteTaskParams(BaseModel):
-    """Parameters for complete_task tool."""
-    user_id: str  # Will be converted to UUID
-    task_id: Optional[UUID] = None  # Optional - can use task_title instead
-    task_title: Optional[str] = None  # Optional - natural language lookup
-
-
-class DeleteTaskParams(BaseModel):
-    """Parameters for delete_task tool."""
-    user_id: str  # Will be converted to UUID
-    task_id: Optional[UUID] = None  # Optional - can use task_title instead
-    task_title: Optional[str] = None  # Optional - natural language lookup
+from .phase2_api_client import Phase2ApiClient
 
 
 class TodoTools:
-    """Class containing all todo management tools that use the database."""
+    """
+    Class containing all todo management tools that bridge to Phase II API.
 
-    def __init__(self, session):
-        """Initialize with a database session."""
-        self.session = session
-        self.todo_service = TodoService(session)
+    This class provides the same interface as before but now calls Phase II's
+    REST API instead of accessing the database directly.
+    """
 
-    def _convert_user_id(self, user_id: str) -> UUID:
+    def __init__(self, session=None, access_token: Optional[str] = None):
         """
-        Convert string user_id to UUID format.
+        Initialize with the Phase II API client.
 
         Args:
-            user_id: User ID as string from auth system
-
-        Returns:
-            UUID object
+            session: Database session (kept for compatibility, but not used)
+            access_token: JWT Bearer token for Phase II API authentication
         """
-        try:
-            # Try to parse as UUID directly
-            return UUID(user_id)
-        except ValueError:
-            # If it's not a UUID, we need to look up the actual UUID from the user table
-            # For this case, let's assume the auth system provides UUIDs as strings
-            # In a real scenario, we'd query the user table by username/email
-            raise ValueError(f"Invalid user_id format: {user_id}. Expected UUID.")
+        self.session = session  # Kept for compatibility
+        self.api_client = Phase2ApiClient(access_token=access_token)
+        logger.info("[TodoTools] Initialized with Phase2ApiClient")
 
     def add_task(self, user_id: str, title: str, description: Optional[str] = None, due_date: Optional[str] = None) -> Dict[str, Any]:
         """
-        Add a new task to the user's todo list.
+        Add a new task to the user's todo list via Phase II API.
 
         Args:
             user_id: The ID of the user creating the todo (string from auth)
@@ -118,37 +58,17 @@ class TodoTools:
                     "recoverable": True
                 }
 
-            # Convert user_id to UUID format
-            user_uuid = self._convert_user_id(user_id)
-
-            # Create new task
-            new_task = self.todo_service.create_todo(
-                user_id=user_uuid,
+            # Call Phase II API
+            result = self.api_client.add_task(
                 title=title.strip(),
                 description=description,
                 due_date=due_date
             )
 
-            # Convert to TodoItem format
-            task_item = TodoItem(
-                id=str(new_task.id),
-                title=new_task.title,
-                description=new_task.description,
-                status=new_task.status,
-                priority=new_task.priority,
-                due_date=new_task.due_date.isoformat() if new_task.due_date else None,
-                user_id=str(new_task.user_id),
-                created_at=new_task.created_at.isoformat() if new_task.created_at else None,
-                updated_at=new_task.updated_at.isoformat() if new_task.updated_at else None
-            )
-
-            return {
-                "success": True,
-                "task": task_item.model_dump(),
-                "message": f"Task '{title}' added successfully"
-            }
+            return result
 
         except Exception as e:
+            logger.exception(f"[TodoTools] Error in add_task: {str(e)}")
             return {
                 "success": False,
                 "error_code": "ADD_TASK_ERROR",
@@ -158,47 +78,23 @@ class TodoTools:
 
     def list_tasks(self, user_id: str, status_filter: Optional[str] = None) -> Dict[str, Any]:
         """
-        List tasks for a specific user.
+        List tasks for the authenticated user via Phase II API.
 
         Args:
-            user_id: The ID of the user
+            user_id: The ID of the user (Phase II API extracts from token)
             status_filter: Optional status filter ("all", "pending", "completed")
 
         Returns:
             Dictionary with success status and list of tasks
         """
         try:
-            # Convert user_id to UUID format
-            user_uuid = self._convert_user_id(user_id)
+            # Call Phase II API
+            result = self.api_client.list_tasks(status_filter=status_filter)
 
-            # Get tasks
-            tasks = self.todo_service.get_todos_by_user(
-                user_id=user_uuid,
-                status_filter=status_filter
-            )
-
-            # Convert to TodoItem format
-            task_items = [
-                TodoItem(
-                    id=str(task.id),
-                    title=task.title,
-                    description=task.description,
-                    status=task.status,
-                    priority=task.priority,
-                    due_date=task.due_date.isoformat() if task.due_date else None,
-                    user_id=str(task.user_id),
-                    created_at=task.created_at.isoformat() if task.created_at else None,
-                    updated_at=task.updated_at.isoformat() if task.updated_at else None
-                ).model_dump() for task in tasks
-            ]
-
-            return {
-                "success": True,
-                "tasks": task_items,
-                "total_count": len(task_items)
-            }
+            return result
 
         except Exception as e:
+            logger.exception(f"[TodoTools] Error in list_tasks: {str(e)}")
             return {
                 "success": False,
                 "error_code": "LIST_TASKS_ERROR",
@@ -211,10 +107,10 @@ class TodoTools:
                    status: Optional[str] = None, priority: Optional[str] = None,
                    due_date: Optional[str] = None) -> Dict[str, Any]:
         """
-        Update an existing task by ID or title.
+        Update an existing task by ID or title via Phase II API.
 
         Args:
-            user_id: The ID of the user
+            user_id: The ID of the user (Phase II API extracts from token)
             task_id: The ID of the task to update (optional if task_title provided)
             task_title: The title of the task to update (for natural language lookup)
             title: New title (optional)
@@ -236,39 +132,35 @@ class TodoTools:
                     "recoverable": True
                 }
 
-            # Convert user_id to UUID format
-            user_uuid = self._convert_user_id(user_id)
-
-            task_uuid = None
+            target_task_id = task_id
 
             # If task_title provided, look up by title first
             if task_title and not task_id:
-                todo = self.todo_service.get_todo_by_title(task_title, user_uuid)
-                if not todo:
+                task = self.api_client.find_task_by_title(task_title)
+                if not task:
                     return {
                         "success": False,
                         "error_code": "TASK_NOT_FOUND",
                         "error_message": f"No task found matching '{task_title}'",
                         "recoverable": False
                     }
-                task_uuid = todo.id
-            elif task_id:
-                # Convert task_id to UUID if it's a string
-                if isinstance(task_id, str):
-                    try:
-                        task_uuid = UUID(task_id)
-                    except ValueError:
-                        return {
-                            "success": False,
-                            "error_code": "VALIDATION_ERROR",
-                            "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
-                            "recoverable": False
-                        }
-                else:
-                    task_uuid = task_id
+                target_task_id = UUID(task.get("id"))
 
-            # Prepare update data
-            update_data = TodoUpdate(
+            # Convert task_id to UUID if it's a string
+            if isinstance(target_task_id, str):
+                try:
+                    target_task_id = UUID(target_task_id)
+                except ValueError:
+                    return {
+                        "success": False,
+                        "error_code": "VALIDATION_ERROR",
+                        "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
+                        "recoverable": False
+                    }
+
+            # Call Phase II API
+            result = self.api_client.update_task(
+                task_id=target_task_id,
                 title=title,
                 description=description,
                 status=status,
@@ -276,42 +168,10 @@ class TodoTools:
                 due_date=due_date
             )
 
-            # Update the task
-            updated_task = self.todo_service.update_todo(
-                todo_id=task_uuid,
-                user_id=user_uuid,
-                update_data=update_data
-            )
-
-            if not updated_task:
-                identifier = task_title if task_title else str(task_id)
-                return {
-                    "success": False,
-                    "error_code": "TASK_NOT_FOUND_OR_PERMISSION_DENIED",
-                    "error_message": f"Task '{identifier}' not found or you don't have permission to update it",
-                    "recoverable": False
-                }
-
-            # Convert to TodoItem format
-            task_item = TodoItem(
-                id=str(updated_task.id),
-                title=updated_task.title,
-                description=updated_task.description,
-                status=updated_task.status,
-                priority=updated_task.priority,
-                due_date=updated_task.due_date.isoformat() if updated_task.due_date else None,
-                user_id=str(updated_task.user_id),
-                created_at=updated_task.created_at.isoformat() if updated_task.created_at else None,
-                updated_at=updated_task.updated_at.isoformat() if updated_task.updated_at else None
-            )
-
-            return {
-                "success": True,
-                "task": task_item.model_dump(),
-                "message": f"Task '{updated_task.title}' updated successfully"
-            }
+            return result
 
         except Exception as e:
+            logger.exception(f"[TodoTools] Error in update_task: {str(e)}")
             return {
                 "success": False,
                 "error_code": "UPDATE_TASK_ERROR",
@@ -321,10 +181,10 @@ class TodoTools:
 
     def complete_task(self, user_id: str, task_id: UUID = None, task_title: str = None) -> Dict[str, Any]:
         """
-        Mark a task as completed by ID or title.
+        Mark a task as completed by ID or title via Phase II API.
 
         Args:
-            user_id: The ID of the user
+            user_id: The ID of the user (Phase II API extracts from token)
             task_id: The ID of the task to mark as completed (optional if task_title provided)
             task_title: The title of the task to complete (for natural language lookup)
 
@@ -341,76 +201,39 @@ class TodoTools:
                     "recoverable": True
                 }
 
-            # Convert user_id to UUID format
-            user_uuid = self._convert_user_id(user_id)
-
-            task_uuid = None
+            target_task_id = task_id
 
             # If task_title provided, look up by title first
             if task_title and not task_id:
-                todo = self.todo_service.get_todo_by_title(task_title, user_uuid)
-                if not todo:
+                task = self.api_client.find_task_by_title(task_title)
+                if not task:
                     return {
                         "success": False,
                         "error_code": "TASK_NOT_FOUND",
                         "error_message": f"No task found matching '{task_title}'",
                         "recoverable": False
                     }
-                task_uuid = todo.id
-            elif task_id:
-                # Convert task_id to UUID if it's a string
-                if isinstance(task_id, str):
-                    try:
-                        task_uuid = UUID(task_id)
-                    except ValueError:
-                        return {
-                            "success": False,
-                            "error_code": "VALIDATION_ERROR",
-                            "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
-                            "recoverable": False
-                        }
-                else:
-                    task_uuid = task_id
+                target_task_id = UUID(task.get("id"))
 
-            # Prepare update data to mark as completed
-            update_data = TodoUpdate(status="completed")
+            # Convert task_id to UUID if it's a string
+            if isinstance(target_task_id, str):
+                try:
+                    target_task_id = UUID(target_task_id)
+                except ValueError:
+                    return {
+                        "success": False,
+                        "error_code": "VALIDATION_ERROR",
+                        "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
+                        "recoverable": False
+                    }
 
-            # Update the task
-            updated_task = self.todo_service.update_todo(
-                todo_id=task_uuid,
-                user_id=user_uuid,
-                update_data=update_data
-            )
+            # Call Phase II API
+            result = self.api_client.complete_task(task_id=target_task_id)
 
-            if not updated_task:
-                identifier = task_title if task_title else str(task_id)
-                return {
-                    "success": False,
-                    "error_code": "TASK_NOT_FOUND_OR_PERMISSION_DENIED",
-                    "error_message": f"Task '{identifier}' not found or you don't have permission to update it",
-                    "recoverable": False
-                }
-
-            # Convert to TodoItem format
-            task_item = TodoItem(
-                id=str(updated_task.id),
-                title=updated_task.title,
-                description=updated_task.description,
-                status=updated_task.status,
-                priority=updated_task.priority,
-                due_date=updated_task.due_date.isoformat() if updated_task.due_date else None,
-                user_id=str(updated_task.user_id),
-                created_at=updated_task.created_at.isoformat() if updated_task.created_at else None,
-                updated_at=updated_task.updated_at.isoformat() if updated_task.updated_at else None
-            )
-
-            return {
-                "success": True,
-                "task": task_item.model_dump(),
-                "message": f"Task '{updated_task.title}' marked as completed"
-            }
+            return result
 
         except Exception as e:
+            logger.exception(f"[TodoTools] Error in complete_task: {str(e)}")
             return {
                 "success": False,
                 "error_code": "COMPLETE_TASK_ERROR",
@@ -420,10 +243,10 @@ class TodoTools:
 
     def delete_task(self, user_id: str, task_id: UUID = None, task_title: str = None) -> Dict[str, Any]:
         """
-        Delete a task by ID or title.
+        Delete a task by ID or title via Phase II API.
 
         Args:
-            user_id: The ID of the user
+            user_id: The ID of the user (Phase II API extracts from token)
             task_id: The ID of the task to delete (optional if task_title provided)
             task_title: The title of the task to delete (for natural language lookup)
 
@@ -443,69 +266,51 @@ class TodoTools:
 
             logger.info(f"delete_task called: user_id={user_id}, task_id={task_id}, task_title={task_title}")
 
-            # Convert user_id to UUID format
-            user_uuid = self._convert_user_id(user_id)
-
-            task_uuid = None
+            target_task_id = task_id
             deleted_task_title = task_title  # Store for success message
 
             # If task_title provided, look up by title first
             if task_title and not task_id:
-                logger.info(f"Looking up task by title: '{task_title}' for user {user_uuid}")
-                todo = self.todo_service.get_todo_by_title(task_title, user_uuid)
-                if not todo:
-                    logger.warning(f"Task not found with title: '{task_title}' for user {user_uuid}")
+                logger.info(f"Looking up task by title: '{task_title}'")
+                task = self.api_client.find_task_by_title(task_title)
+                if not task:
+                    logger.warning(f"Task not found with title: '{task_title}'")
                     return {
                         "success": False,
                         "error_code": "TASK_NOT_FOUND",
                         "error_message": f"No task found matching '{task_title}'",
                         "recoverable": False
                     }
-                task_uuid = todo.id
-                deleted_task_title = todo.title
-                logger.info(f"Found task by title: {task_uuid}")
-            elif task_id:
-                # Convert task_id to UUID if it's a string
-                if isinstance(task_id, str):
-                    try:
-                        task_uuid = UUID(task_id)
-                    except ValueError:
-                        logger.error(f"Invalid task_id format: {task_id}")
-                        return {
-                            "success": False,
-                            "error_code": "VALIDATION_ERROR",
-                            "error_message": f"Invalid task_id format: {task_id}. Expected UUID.",
-                            "recoverable": False
-                        }
-                else:
-                    task_uuid = task_id
-                logger.info(f"Using task_id: {task_uuid}")
+                target_task_id = UUID(task.get("id"))
+                deleted_task_title = task.get("title", task_title)
+                logger.info(f"Found task by title: {target_task_id}")
 
-            # Delete the task
-            logger.info(f"Deleting task: todo_id={task_uuid}, user_id={user_uuid}")
-            success = self.todo_service.delete_todo(
-                todo_id=task_uuid,
-                user_id=user_uuid
-            )
+            # Convert task_id to UUID if it's a string
+            if isinstance(target_task_id, str):
+                try:
+                    target_task_id = UUID(target_task_id)
+                except ValueError:
+                    logger.error(f"Invalid task_id format: {target_task_id}")
+                    return {
+                        "success": False,
+                        "error_code": "VALIDATION_ERROR",
+                        "error_message": f"Invalid task_id format: {target_task_id}. Expected UUID.",
+                        "recoverable": False
+                    }
 
-            if not success:
-                identifier = task_title if task_title else str(task_id)
-                logger.error(f"Failed to delete task '{identifier}' - not found or permission denied")
-                return {
-                    "success": False,
-                    "error_code": "TASK_NOT_FOUND_OR_PERMISSION_DENIED",
-                    "error_message": f"Task '{identifier}' not found or you don't have permission to delete it",
-                    "recoverable": False
-                }
+            logger.info(f"Deleting task: {target_task_id}")
 
-            logger.info(f"Successfully deleted task: '{deleted_task_title}'")
-            return {
-                "success": True,
-                "message": f"Task '{deleted_task_title}' deleted successfully"
-            }
+            # Call Phase II API
+            result = self.api_client.delete_task(task_id=target_task_id)
+
+            # Update success message with task title
+            if result.get("success") and deleted_task_title:
+                result["message"] = f"Task '{deleted_task_title}' deleted successfully"
+
+            return result
 
         except Exception as e:
-            logger.exception(f"Exception in delete_task: {str(e)}")
+            logger.exception(f"[TodoTools] Error in delete_task: {str(e)}")
             return {
                 "success": False,
                 "error_code": "DELETE_TASK_ERROR",

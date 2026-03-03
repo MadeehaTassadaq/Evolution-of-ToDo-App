@@ -1,0 +1,26 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
+    "bcrypt<4.1",
+    "better-exceptions>=0.3.3",
+    "fastapi>=0.131.0",
+    "httpx>=0.28.1",
+    "openai>=2.21.0",
+    "openai-agents>=0.9.3",
+    "openai-chatkit>=1.6.2",
+    "passlib[bcrypt]>=1.7.4",
+    "psycopg2-binary>=2.9.11",
+    "pydantic[email]>=2.12.5",
+    "pyjwt>=2.11.0",
+    "python-dotenv>=1.2.1",
+    "python-jose[cryptography]>=3.5.0",
+    "python-multipart>=0.0.22",
+    "slowapi>=0.1.9",
+    "sqlmodel>=0.0.37",
+    "uvicorn[standard]>=0.41.0",
+]

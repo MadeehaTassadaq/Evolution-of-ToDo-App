@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
-from .api import auth, tasks, chat
+from .api import auth, tasks, chat_fixed as chat
 from .database import create_db_and_tables
 
 # Set up logging
@@ -30,7 +30,16 @@ app = FastAPI(title="Evolution of ToDo API", version="1.0.0", lifespan=lifespan)
 # Configure CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://madeeha123-chatbot.hf.space", "https://evolution-of-to-do-app-bafm.vercel.app"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:7860",  # Phase III chatbot backend
+        "http://127.0.0.1:7860",  # Phase III chatbot backend
+        "https://madeeha123-chatbot.hf.space",
+        "https://evolution-of-to-do-app-bafm.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

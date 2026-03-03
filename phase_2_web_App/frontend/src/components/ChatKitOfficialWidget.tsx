@@ -53,7 +53,8 @@ import { ChatKit, useChatKit } from '@openai/chatkit-react';
 // This is our custom backend - NOT OpenAI's hosted service
 // For local: http://localhost:7860
 // For Hugging Face Spaces: https://madeeha123-fastapi.hf.space (configured in Vercel)
-const CHATKIT_BACKEND_URL = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:7860';
+// Use Phase II backend URL instead of Phase III
+const CHATKIT_BACKEND_URL = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:8000';
 
 // Helper to get auth token and build URL with query parameter
 const getChatKitApiUrl = (): string => {
@@ -198,7 +199,7 @@ function ChatKitAuthenticatedWidget() {
 
       // Check for backend connectivity issues
       if (error.message?.includes('fetch') || error.message?.includes('network')) {
-        console.error('[ChatKit Widget] Cannot connect to ChatKit backend at:', CHATKIT_API_URL);
+        console.error('[ChatKit Widget] Cannot connect to ChatKit backend at:', getChatKitApiUrl());
         console.error('[ChatKit Widget] Make sure the backend is running and accessible');
       }
     },
