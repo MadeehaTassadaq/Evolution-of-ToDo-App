@@ -1,0 +1,41 @@
+# ============================================
+# KUBERNETES MANIFEST - CONFIGMAP
+# ============================================
+# Non-sensitive configuration for the ToDo application
+# DigitalOcean Kubernetes (DOKS) compatible
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: todo-config
+  namespace: todo-app
+  labels:
+    app: todo-app
+    component: config
+
+data:
+  # Application Environment
+  APP_ENV: "production"
+  LOG_LEVEL: "info"
+
+  # Backend Configuration
+  BACKEND_PORT: "8000"
+  BACKEND_HOST: "0.0.0.0"
+
+  # Frontend Configuration
+  FRONTEND_PORT: "3000"
+  NODE_ENV: "production"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+  # API URLs (internal K8s service communication)
+  # These point to K8s services, not external URLs
+  API_URL_INTERNAL: "http://backend-service:8000"
+  CHATBOT_API_URL_INTERNAL: "http://backend-service:8000"
+
+---
+# LEARNING NOTES:
+# ===============
+# - ConfigMaps store non-sensitive configuration data
+# - Environment variables can be referenced in deployments
+# - Internal service URLs use service names (backend-service)
+# - External URLs will be set via Ingress or LoadBalancer

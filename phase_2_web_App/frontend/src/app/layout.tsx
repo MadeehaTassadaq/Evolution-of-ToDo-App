@@ -30,16 +30,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        {/* CRITICAL: ChatKit script MUST use beforeInteractive in <head> for web components */}
+        <Script
+          src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
+          strategy="beforeInteractive"
+        />
+      </head>
       <body className="font-sans antialiased bg-black text-white" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
         <ClientWrapper>{children}</ClientWrapper>
         <ChatKitErrorBoundary>
           <ChatKitOfficialWidget />
         </ChatKitErrorBoundary>
-        {/* Load ChatKit Web Component from CDN */}
-        <Script
-          src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
-          strategy="afterInteractive"
-        />
       </body>
     </html>
   );

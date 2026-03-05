@@ -2,12 +2,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
-from .api import auth, tasks, chat_fixed as chat
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+from .api import auth, tasks, chat
 from .database import create_db_and_tables
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Log critical environment variables (for debugging)
+logger.info(f"OPENAI_API_KEY set: {bool(os.getenv('OPENAI_API_KEY'))}")
+logger.info(f"DATABASE_URL set: {bool(os.getenv('DATABASE_URL'))}")
+logger.info(f"BETTER_AUTH_SECRET set: {bool(os.getenv('BETTER_AUTH_SECRET'))}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

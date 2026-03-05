@@ -37,5 +37,18 @@ def create_db_and_tables():
 
 def get_session():
     from sqlmodel import Session
-    with Session(engine) as session:
+    session = Session(engine)
+    try:
         yield session
+    finally:
+        session.close()
+
+
+def get_session_unmanaged():
+    """
+    Get a session without automatic closing.
+    Use this for SSE streaming where the session needs to stay open.
+    Caller is responsible for closing the session.
+    """
+    from sqlmodel import Session
+    return Session(engine)

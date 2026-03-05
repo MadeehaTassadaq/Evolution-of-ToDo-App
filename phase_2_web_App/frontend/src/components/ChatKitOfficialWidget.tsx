@@ -67,9 +67,19 @@ const getChatKitApiUrl = (): string => {
 };
 
 // Domain Key for ChatKit widget (required for domain validation)
-// Even with custom backend, widget needs domainKey for security
-// Registered for: evolution-of-to-do-app-bafm.vercel.app
-const CHATKIT_DOMAIN_KEY = process.env.NEXT_PUBLIC_OPENAI_DOMAIN_KEY || 'domain_pk_696a62eeaf508197aedf5220ff381cc906aff41e18fc2ffc';
+// For local development, we may need to skip domain validation or use a test key
+// For production: Use your registered domain key
+const isLocalhost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1'
+);
+
+// For local development, you can either:
+// 1. Use a test domain key that includes localhost
+// 2. Skip domain validation (not recommended for production)
+const CHATKIT_DOMAIN_KEY = process.env.NEXT_PUBLIC_OPENAI_DOMAIN_KEY || (
+  isLocalhost ? undefined : 'domain_pk_696a62eeaf508197aedf5220ff381cc906aff41e18fc2ffc'
+);
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -101,7 +111,24 @@ function ChatKitAuthenticatedWidget() {
     console.log('[ChatKit Widget] Backend URL:', getChatKitApiUrl());
     console.log('[ChatKit Widget] Auth Token:', !!getToken());
     console.log('[ChatKit Widget] Current URL:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
+    console.log('[ChatKit Widget] Domain Key:', CHATKIT_DOMAIN_KEY?.substring(0, 20) + '...' || 'None (local development)');
     console.log('[ChatKit Widget] ================================================');
+
+    // Test backend connection
+    const testBackendConnection = async () => {
+      try {
+        const response = await fetch(`${CHATKIT_BACKEND_URL}/health`);
+        if (response.ok) {
+          console.log('[ChatKit Widget] ✅ Backend is reachable!');
+        } else {
+          console.warn('[ChatKit Widget] ⚠️ Backend returned non-OK status:', response.status);
+        }
+      } catch (error) {
+        console.error('[ChatKit Widget] ❌ Backend is NOT reachable:', error);
+      }
+    };
+
+    testBackendConnection();
   }, []);
 
   const chatKit = useChatKit({
@@ -111,6 +138,15 @@ function ChatKitAuthenticatedWidget() {
     api: {
       url: getChatKitApiUrl(), // Dynamic URL with auth token as query parameter
       domainKey: CHATKIT_DOMAIN_KEY,
+    },
+
+    // Trigger task list refresh after assistant responses
+    onResponseEnd: async () => {
+      console.log('[ChatKit Widget] Response ended, triggering task list refresh...');
+      // Dispatch custom event to notify task list component
+      window.dispatchEvent(new CustomEvent('chatkit-operation-complete', {
+        detail: { timestamp: Date.now() }
+      }));
     },
 
     // Client Tool Handler - NOT NEEDED with custom backend
@@ -195,7 +231,14 @@ function ChatKitAuthenticatedWidget() {
 
     // Error handler
     onError: ({ error }) => {
-      console.error('[ChatKit Widget] Error:', error);
+      console.error('[ChatKit Widget] ================================================');
+      console.error('[ChatKit Widget] ERROR:', error);
+      console.error('[ChatKit Widget] Error name:', error.name);
+      console.error('[ChatKit Widget] Error message:', error.message);
+      console.error('[ChatKit Widget] Error stack:', error.stack);
+      console.error('[ChatKit Widget] Backend URL:', getChatKitApiUrl());
+      console.error('[ChatKit Widget] Domain Key:', CHATKIT_DOMAIN_KEY?.substring(0, 20) + '...');
+      console.error('[ChatKit Widget] ================================================');
 
       // Check for backend connectivity issues
       if (error.message?.includes('fetch') || error.message?.includes('network')) {
@@ -322,7 +365,19 @@ const ChatKitOfficialWidget: React.FC = () => {
   // Hide on login/register pages
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/chatkit';
 
+  // Debug logging
+  console.log('[ChatKit Widget] Render state:', {
+    pathname,
+    isAuthPage,
+    isInitialized,
+    hasAuthToken: !!authToken,
+    tokenPrefix: authToken ? authToken.substring(0, 20) + '...' : 'none'
+  });
+
   if (isAuthPage || !isInitialized || !authToken) {
+    console.log('[ChatKit Widget] Not showing widget because:', {
+      reason: isAuthPage ? 'auth page' : !isInitialized ? 'not initialized' : 'no auth token'
+    });
     return null;
   }
 

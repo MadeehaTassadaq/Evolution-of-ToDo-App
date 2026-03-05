@@ -1,0 +1,141 @@
+# ============================================
+# KUBERNETES MANIFEST - NGINX INGRESS CONTROLLER
+# ============================================
+# Routes external traffic to services with SSL/TLS termination
+# DigitalOcean Kubernetes (DOKS) compatible
+#
+# OPTIONAL: This provides advanced routing and SSL/TLS
+# If using LoadBalancer only, this file is not required
+
+---
+# NGINX Ingress Controller Installation (one-time setup)
+# Install with: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.9.4/deploy/static/provider/do/deploy.yaml
+# Verify: kubectl get pods -n ingress-nginx
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: todo-ingress
+  namespace: todo-app
+  labels:
+    app: todo-app
+    component: ingress
+
+  annotations:
+    # NGINX Ingress Controller annotations
+    kubernetes.io/ingress.class: "nginx"
+
+    # SSL/TLS configuration (requires cert-manager)
+    # Install cert-manager: kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+    # SSL redirect
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+
+    # CORS configuration
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, X-User-ID"
+
+    # Proxy settings for SSE streaming
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/read-timeout: "600"
+    nginx.ingress.kubernetes.io/send-timeout: "600"
+
+    # Security headers
+    nginx.ingress.kubernetes.io/referrer-policy: "strict-origin-when-cross-origin"
+    nginx.ingress.kubernetes.io/x-content-type-options: "nosniff"
+    nginx.ingress.kubernetes.io/frame-deny: "true"
+
+spec:
+  # TLS certificate configuration
+  # tls:
+  # - hosts:
+  #   - todo.yourdomain.com
+  #   secretName: todo-tls  # Created by cert-manager
+
+  # Routing rules
+  rules:
+  # Frontend route (default)
+  - host: todo.yourdomain.com  # Replace with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
+
+  # Backend API routes
+  - host: todo.yourdomain.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 8000
+
+  # Alternative: Use LoadBalancer IP instead of domain
+  # - http:
+  #     paths:
+  #     - path: /
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: frontend-service
+  #           port:
+  #             number: 80
+
+---
+# LEARNING NOTES:
+# ===============
+# Ingress vs LoadBalancer:
+# - LoadBalancer: One LB per service ($10-20/month each)
+# - Ingress: One LB for all services (cost effective)
+# - Ingress provides SSL/TLS, routing, and advanced features
+#
+# Setup Steps:
+# 1. Install NGINX Ingress Controller (one-time):
+#    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.9.4/deploy/static/provider/do/deploy.yaml
+#
+# 2. Install cert-manager for SSL (one-time):
+#    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+#
+# 3. Create ClusterIssuer for Let's Encrypt:
+#    cat <<EOF | kubectl apply -f -
+#    apiVersion: cert-manager.io/v1
+#    kind: ClusterIssuer
+#    metadata:
+#      name: letsencrypt-prod
+#    spec:
+#      acme:
+#        server: https://acme-v02.api.letsencrypt.org/directory
+#        email: your@email.com
+#        privateKeySecretRef:
+#          name: letsencrypt-prod
+#        solvers:
+#        - http01:
+#            ingress:
+#              class: nginx
+#    EOF
+#
+# 4. Update this file with your domain and uncomment TLS section
+#
+# 5. Apply: kubectl apply -f k8s/manifests/10-ingress.yaml
+#
+# Verification:
+# - kubectl get ingress -n todo-app
+# - kubectl describe ingress todo-ingress -n todo-app
+# - Check DNS points to LoadBalancer IP
+#
+# SSE Streaming Configuration:
+# - proxy-buffering: "off" is critical for ChatKit SSE streaming
+# - Without this, streaming responses won't work properly

@@ -1,0 +1,142 @@
+# ============================================
+# KUBERNETES MANIFEST - BACKEND DEPLOYMENT
+# ============================================
+# FastAPI backend with ChatKit Python SDK integration
+# DigitalOcean Kubernetes (DOKS) compatible
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  namespace: todo-app
+  labels:
+    app: todo-backend
+    component: backend
+    phase: phase2-3
+
+spec:
+  # Number of replica pods to run
+  replicas: 2
+
+  # Strategy for rolling updates
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Create 1 extra pod during update
+      maxUnavailable: 0  # Don't make any pods unavailable
+
+  # Selector for pods this deployment manages
+  selector:
+    matchLabels:
+      app: todo-backend
+
+  # Pod template
+  template:
+    metadata:
+      labels:
+        app: todo-backend
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        # Docker image - Replace with your registry
+        # For local testing: your-registry/todo-backend:latest
+        # For DigitalOcean Registry: registry.digitalocean.com/your-registry/todo-backend:latest
+        image: todo-backend:latest
+        imagePullPolicy: IfNotPresent
+
+        # Port configuration
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+
+        # Environment variables
+        env:
+        # From ConfigMap
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: todo-config
+              key: BACKEND_PORT
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: todo-config
+              key: LOG_LEVEL
+
+        # From Secrets
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: todo-secrets
+              key: database-url
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: todo-secrets
+              key: openai-api-key
+        - name: BETTER_AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: todo-secrets
+              key: better-auth-secret
+        - name: OPENAI_CHATKIT_DOMAIN_KEY
+          valueFrom:
+            secretKeyRef:
+              name: todo-secrets
+              key: openai-chatkit-domain-key
+
+        # Health check - Liveness Probe
+        # Checks if the container is alive
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30   # Wait 30s before first check
+          periodSeconds: 10          # Check every 10s
+          timeoutSeconds: 5          # Timeout after 5s
+          failureThreshold: 3        # Fail after 3 consecutive failures
+
+        # Health check - Readiness Probe
+        # Checks if the container is ready to serve traffic
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5    # Wait 5s before first check
+          periodSeconds: 5           # Check every 5s
+          timeoutSeconds: 3          # Timeout after 3s
+          failureThreshold: 3        # Fail after 3 consecutive failures
+
+        # Resource limits and requests
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+# LEARNING NOTES:
+# ===============
+# Rolling Update Strategy:
+# - maxSurge: 1 = Can create 1 extra pod during update (temporarily 3 pods)
+# - maxUnavailable: 0 = All pods must be available during update
+# - This ensures zero-downtime deployments
+#
+# Health Probes:
+# - Liveness: Restart pod if failing (container crash recovery)
+# - Readiness: Don't send traffic if not ready (traffic management)
+# - /health endpoint must exist in FastAPI (defined in main.py)
+#
+# Resources:
+# - Requests: Minimum guaranteed resources
+# - Limits: Maximum allowed resources
+# - DigitalOcean droplets have specific CPU/memory limits
+#
+# Image Registry:
+# - Build and push: docker build -t todo-backend:latest ./phase_2_web_App/backend
+# - Tag for registry: docker tag todo-backend:latest registry.digitalocean.com/your-registry/todo-backend:v1
+# - Push: docker push registry.digitalocean.com/your-registry/todo-backend:v1

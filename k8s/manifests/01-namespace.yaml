@@ -1,0 +1,22 @@
+# ============================================
+# KUBERNETES MANIFEST - NAMESPACE
+# ============================================
+# Creates a dedicated namespace for the ToDo application
+# DigitalOcean Kubernetes (DOKS) compatible
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: todo-app
+  labels:
+    name: todo-app
+    project: evolution-of-todo
+    phase: production
+    component: chatkit-integrated
+
+---
+# LEARNING NOTES:
+# ===============
+# - Namespaces provide logical isolation for resources
+# - All subsequent resources will be created in this namespace
+# - Label resources for easy filtering: kubectl get all -n todo-app

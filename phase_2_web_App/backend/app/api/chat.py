@@ -81,56 +81,101 @@ async def chatkit_streaming_endpoint(
     - Authorization: Bearer <token> header (standard)
     - ?token=<token> query parameter (for ChatKit widget)
     """
-    user_id = current_user.get("id")
-    if not user_id:
+    try:
+        user_id = current_user.get("id")
+        if not user_id:
+            logger.error("[ChatKit] Missing user_id in current_user")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials"
+            )
+
+        user = db.get(User, user_id)
+        if not user:
+            logger.error(f"[ChatKit] User not found for user_id={user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+
+        logger.info(f"[ChatKit] Request from user_id={user_id}, email={user.email}")
+
+        # Read request body
+        request_body = await request.body()
+        content_type = request.headers.get("content-type", "")
+        logger.info(f"[ChatKit] Request - Content-Type: {content_type}, Method: {request.method}")
+        logger.info(f"[ChatKit] Request body length: {len(request_body)} bytes")
+        if len(request_body) > 0:
+            try:
+                body_json = json.loads(request_body)
+                logger.info(f"[ChatKit] Request body JSON: {json.dumps(body_json, indent=2)}")
+            except:
+                logger.info(f"[ChatKit] Request body preview: {request_body[:500]}...")
+
+        # Build context for ChatKit server
+        context = {
+            "user_id": user_id,
+            "email": user.email,
+            "db": db
+        }
+
+        logger.info("[ChatKit] Calling chatkit_server.process()...")
+
+        # Use official ChatKit server.process() method
+        try:
+            result = await chatkit_server.process(request_body, context)
+            logger.info(f"[ChatKit] process() completed successfully")
+        except Exception as process_error:
+            logger.exception(f"[ChatKit] process() raised exception: {process_error}")
+            raise
+
+        logger.info(f"[ChatKit] process() result type: {type(result)}")
+        logger.info(f"[ChatKit] process() result: {result}")
+
+        # Check if result is streaming or non-streaming
+        from chatkit.server import StreamingResult, NonStreamingResult
+
+        if isinstance(result, StreamingResult):
+            # StreamingResult is an async generator that yields SSE bytes
+            logger.info("[ChatKit] Returning streaming response")
+            return StreamingResponse(
+                result,
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no"
+                }
+            )
+        elif isinstance(result, NonStreamingResult):
+            # NonStreamingResult contains JSON bytes
+            logger.info("[ChatKit] Returning non-streaming JSON response")
+            logger.info(f"[ChatKit] NonStreamingResult content preview: {result.json[:500] if result.json else b'empty'}...")
+            from fastapi.responses import Response
+            return Response(content=result.json, media_type="application/json")
+        elif result is None:
+            # Handle None result
+            logger.error("[ChatKit] process() returned None")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="ChatKit server returned no response"
+            )
+        else:
+            # Unknown result type
+            logger.error(f"[ChatKit] Unknown result type: {type(result)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"ChatKit server returned unexpected result type: {type(result)}"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[ChatKit] Unexpected error processing request: {e}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"ChatKit processing error: {str(e)}"
         )
-
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
-        )
-
-    logger.info(f"[ChatKit] Request from user_id={user_id}, email={user.email}")
-
-    # Read request body
-    request_body = await request.body()
-    logger.info(f"[ChatKit] Request body: {request_body[:200]}...")
-
-    # Build context for ChatKit server
-    context = {
-        "user_id": user_id,
-        "email": user.email,
-        "db": db
-    }
-
-    # Use official ChatKit server.process() method
-    result = await chatkit_server.process(request_body, context)
-
-    # Check if result is streaming or non-streaming
-    from chatkit.server import StreamingResult
-
-    if isinstance(result, StreamingResult):
-        # StreamingResult is an async generator that yields SSE bytes
-        logger.info("[ChatKit] Returning streaming response")
-        return StreamingResponse(
-            result,
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"
-            }
-        )
-    else:
-        # Non-streaming JSON response
-        logger.info("[ChatKit] Returning JSON response")
-        from fastapi.responses import Response
-        return Response(content=result.json, media_type="application/json")
 
 
 # ============================================================================

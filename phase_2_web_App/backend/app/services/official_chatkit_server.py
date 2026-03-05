@@ -1,32 +1,39 @@
 """
-Official ChatKit Server using openai-chatkit Python SDK
+Official ChatKit Server using OpenAI ChatKit Python SDK + OpenAI Agents SDK
 
-This extends ChatKitServer and implements the respond() method properly
-to work with the official @openai/chatkit-react frontend library.
+This implementation:
+1. Extends ChatKitServer for ChatKit protocol compliance
+2. Uses OpenAI Agents SDK for agent execution (Agent + Runner)
+3. Uses stream_agent_response() for ChatKit event streaming
+4. Integrates MCP-compatible stateless tools
+5. Maintains PostgreSQL store for thread persistence
 """
 
-import json
 import logging
-from typing import Any, AsyncIterator
+import os
+from typing import AsyncIterator
 from datetime import datetime, timezone
 
 from chatkit.server import ChatKitServer
-from chatkit.agents import stream_agent_response, AgentContext
+from chatkit.agents import AgentContext, stream_agent_response
 from chatkit.types import (
     ThreadMetadata,
     UserMessageItem,
     ThreadStreamEvent,
-    ThreadItemDoneEvent,
-    AssistantMessageItem,
-    AssistantMessageContent,
 )
-from openai import OpenAI
-from sqlmodel import Session, select
+from agents import Agent, Runner, set_default_openai_client
+from openai import AsyncOpenAI
+import json
 
 from ..models.user import User
 from ..models.task import Task
+from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
+
+# Import MCP tools
+from .mcp_tools import MCP_TOOLS
+from .chatkit_store import Phase2ChatKitStore, generate_thread_title_from_message
 
 
 def utc_now():
@@ -38,21 +45,161 @@ class TodoChatKitServer(ChatKitServer[dict]):
     """
     Official ChatKit server for Todo AI Assistant.
 
-    Extends ChatKitServer from openai-chatkit package.
+    Architecture:
+    - ChatKitServer: SSE streaming protocol for @openai/chatkit-react widget
+    - OpenAI Agents SDK: Agent execution with tool calling
+    - MCP Tools: Stateless, database-backed task operations
+    - PostgreSQL Store: Thread persistence across server restarts
+
+    Port: 8000 (FastAPI backend)
+    Endpoint: /api/v1/chatkit
     """
 
     def __init__(self):
-        """Initialize the ChatKit server with minimal store."""
-        # Create a simple in-memory store for thread management
-        from chatkit.store import InMemoryStore
-        from chatkit.attachment_store import InMemoryAttachmentStore
-
+        """Initialize the ChatKit server with OpenAI Agents SDK integration."""
+        # Initialize PostgreSQL store for thread persistence
         super().__init__(
-            data_store=InMemoryStore(),
-            attachment_store=InMemoryAttachmentStore()
+            store=Phase2ChatKitStore()
         )
-        self.openai_client = OpenAI()
-        logger.info("[ChatKitServer] Initialized with official ChatKit SDK")
+
+        # Lazy initialization - will be done on first use
+        self.openai_client = None
+        self.agent = None
+        self._initialized = False
+
+        logger.info("[ChatKitServer] Created (lazy initialization enabled)")
+
+    def _ensure_initialized(self):
+        """Ensure the OpenAI client and agent are initialized."""
+        if self._initialized:
+            return
+
+        # Try to load from environment if not already set
+        # This handles the case where .env is loaded after module import
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            # Try loading .env explicitly
+            from dotenv import load_dotenv
+            load_dotenv()
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+
+        if not openai_api_key:
+            logger.error("[ChatKitServer] OPENAI_API_KEY not set in environment!")
+            self.openai_client = None
+            self.agent = None
+            self._initialized = True  # Don't retry
+        else:
+            # Create async OpenAI client for Agents SDK
+            self.openai_client = AsyncOpenAI(api_key=openai_api_key)
+            set_default_openai_client(self.openai_client)
+
+            # Create the Agent with MCP tools
+            self.agent = self._create_agent()
+            self._initialized = True
+
+            logger.info(
+                "[ChatKitServer] Initialized with "
+                "ChatKit SDK + OpenAI Agents SDK + "
+                f"{len(MCP_TOOLS)} MCP tools + PostgreSQL store"
+            )
+
+    def _create_agent(self) -> Agent:
+        """
+        Create an OpenAI Agents SDK Agent with MCP tools.
+
+        Returns:
+            Agent instance configured for todo management
+        """
+        agent_instructions = """You are a helpful Todo Management Assistant. You help users manage their tasks through natural language.
+
+Available Tools:
+- add_task(title, description): Add a new task
+- list_tasks(status_filter): List tasks (filter by "pending", "completed", or "all")
+- update_task(task_reference, title, description, status): Update a task by reference
+- complete_task(task_reference): Mark a task as completed by reference
+- delete_task(task_reference): Delete a task by reference
+
+NATURAL LANGUAGE TASK REFERENCES:
+Users can reference tasks naturally without IDs:
+
+1. Title References (Exact or Partial):
+   - "complete the buy groceries task" → matches exact title
+   - "mark the groceries task as done" → matches partial title
+   - "delete the task about making meal" → matches title with keywords
+
+2. Positional References:
+   - "complete the first task" → completes task at position #1 (top of list)
+   - "mark the last task as done" → completes most recent task
+   - "delete the second task" → deletes task at position #2
+
+3. Recent Task References:
+   - "complete the task I just added" → completes most recently created task
+   - "mark my recent task as done" → completes recent task
+
+4. Task IDs (Backward Compatibility):
+   - "complete task abc-123" → still works for users who provide IDs
+
+HANDLING AMBIGUITY:
+- When multiple tasks match, present options to the user clearly
+- Guide users to be more specific if needed
+- The system will automatically ask for clarification when 2+ tasks match
+
+Guidelines:
+1. Always confirm actions with the user after executing tools
+2. Be concise and friendly in your responses
+3. When a user asks to add a task, extract the title from their message
+4. When listing tasks, the system shows position numbers (#1, #2, #3) for easy reference
+5. Use emojis to make responses more engaging (✅ for success, 📋 for lists, ❌ for errors)
+6. PREFER NATURAL LANGUAGE REFERENCES over task IDs
+7. Only mention task IDs if the user specifically provides one
+
+Example interactions:
+- User: "Add a task to buy groceries"
+  → Call add_task(title="Buy groceries")
+  → Respond: "✅ Added task: Buy groceries"
+
+- User: "Show my pending tasks"
+  → Call list_tasks(status_filter="pending")
+  → Respond: "📋 Your pending tasks:
+    1. 📝 Buy Groceries
+    2. 📝 Call Mom"
+
+- User: "Mark the groceries task as complete"
+  → Call complete_task(task_reference="groceries")
+  → System finds "Buy Groceries" task
+  → Respond: "✅ Completed task: Buy Groceries"
+
+- User: "Delete the task about making meal"
+  → Call delete_task(task_reference="making meal")
+  → System finds task with title "Make meal prep"
+  → Respond: "🗑️ Deleted task: Make meal prep"
+
+- User: "Complete the first task"
+  → Call complete_task(task_reference="first task")
+  → System finds task at position #1
+  → Respond: "✅ Completed task: Buy Groceries"
+
+- User: "Update the food task to buy vegetables"
+  → Call update_task(task_reference="food", title="Buy vegetables")
+  → System finds "Buy Food" task
+  → Respond: "✅ Updated task: Buy Vegetables"
+
+- User: "Show all completed tasks"
+  → Call list_tasks(status_filter="completed")
+  → Respond with formatted list
+
+Remember: Users speak naturally. Extract task references from their sentences and use them with the tools. The task resolver will handle matching by title, position, or recent references automatically.
+"""
+
+        agent = Agent(
+            name="TodoAssistant",
+            instructions=agent_instructions,
+            tools=MCP_TOOLS,
+            model="gpt-4o-mini"  # Better for function calling
+        )
+
+        logger.info(f"[ChatKitServer] Created agent with {len(MCP_TOOLS)} tools")
+        return agent
 
     async def respond(
         self,
@@ -61,26 +208,92 @@ class TodoChatKitServer(ChatKitServer[dict]):
         context: dict,
     ) -> AsyncIterator[ThreadStreamEvent]:
         """
-        Process user message and stream response events.
+        Process user message using OpenAI Agents SDK and stream ChatKit events.
 
-        This is the main method that ChatKitServer calls.
-        It must yield ThreadStreamEvent objects.
+        This is the main entry point called by ChatKitServer.process().
+
+        Flow:
+        1. Extract user message from UserMessageItem
+        2. Create AgentContext with thread, store, and request context
+        3. Run the Agent using Runner.run()
+        4. Stream ChatKit events using stream_agent_response()
+
+        Args:
+            thread: ChatKit thread metadata
+            item: User message item (None for initial greeting)
+            context: Request context with user_id and db session
+
+        Yields:
+            ThreadStreamEvent objects for SSE streaming to frontend
         """
+        logger.info(f"[ChatKitServer] respond() called - thread.id={thread.id}, item={item is not None}, user_id={context.get('user_id')}")
+
+        # Ensure initialization (lazy loading with .env support)
+        self._ensure_initialized()
+
+        # Validate agent is initialized
+        if not self.agent:
+            logger.error("[ChatKitServer] Agent not initialized")
+            from chatkit.types import ErrorEvent, ErrorCode
+            yield ErrorEvent(
+                code=ErrorCode.STREAM_ERROR,
+                message="OpenAI API key not configured",
+                allow_retry=False
+            )
+            return
+
         # Get user info from context
         user_id = context.get("user_id")
         db = context.get("db")
 
         if not user_id or not db:
             logger.error("[ChatKitServer] Missing user_id or db in context")
-            yield self._error_event("Authentication required")
+            from chatkit.types import ErrorEvent, ErrorCode
+            yield ErrorEvent(
+                code=ErrorCode.STREAM_ERROR,
+                message="Authentication required",
+                allow_retry=False
+            )
             return
 
         user = db.get(User, user_id)
         if not user:
-            yield self._error_event("User not found")
+            logger.error(f"[ChatKitServer] User not found for user_id={user_id}")
+            from chatkit.types import ErrorEvent, ErrorCode
+            yield ErrorEvent(
+                code=ErrorCode.STREAM_ERROR,
+                message="User not found",
+                allow_retry=False
+            )
             return
 
-        # Extract user message
+        # Handle empty message (initial greeting)
+        if not item or not item.content:
+            logger.info(f"[ChatKitServer] Sending greeting to user {user.email}")
+            greeting = self._get_greeting_message()
+            from chatkit.types import AssistantMessageItem, AssistantMessageContent
+            from chatkit.store import Store
+
+            assistant_id = self.store.generate_item_id("msg", thread, context)
+            greeting_item = AssistantMessageItem(
+                id=assistant_id,
+                thread_id=thread.id,
+                created_at=utc_now(),
+                content=[
+                    AssistantMessageContent(
+                        type="output_text",
+                        text=greeting,
+                        annotations=[]
+                    )
+                ],
+            )
+
+            yield greeting_item
+            from chatkit.types import ThreadItemDoneEvent
+            yield ThreadItemDoneEvent(item=greeting_item)
+            return
+
+        # Extract user message text
         user_message = ""
         if item and item.content:
             for content in item.content:
@@ -88,40 +301,24 @@ class TodoChatKitServer(ChatKitServer[dict]):
                     user_message = content.text
                     break
 
-        logger.info(f"[ChatKitServer] Processing message from {user.email}: {user_message[:50]}")
+        logger.info(f"[ChatKitServer] Processing message from {user.email}: {user_message[:50]}...")
 
-        # If no message, send greeting
-        if not user_message:
-            greeting = (
-                "Hi! I'm your Todo AI Assistant. I can help you:\n\n"
-                "• Add a new task\n"
-                "• Show your tasks\n"
-                "• Update a task\n"
-                "• Mark a task complete\n"
-                "• Delete a task\n\n"
-                "What would you like to do?"
-            )
+        # Update thread title if it's generic (first message in conversation)
+        if user_message and thread.title in ["New Chat", "Todo Chat", "New Conversation"]:
+            new_title = generate_thread_title_from_message(user_message)
+            thread.title = new_title
+            # Save updated thread title
+            try:
+                await self.store.save_thread(thread, context)
+                logger.info(f"[ChatKitServer] Updated thread {thread.id} title to '{new_title}'")
+            except Exception as e:
+                logger.warning(f"[ChatKitServer] Could not update thread title: {e}")
 
-            assistant_id = self.store.generate_item_id("msg", thread, context)
-            yield ThreadItemDoneEvent(
-                item=AssistantMessageItem(
-                    id=assistant_id,
-                    thread_id=thread.id,
-                    created_at=utc_now(),
-                    content=[
-                        AssistantMessageContent(
-                            type="output_text",
-                            text=greeting,
-                            annotations=[]
-                        )
-                    ],
-                )
-            )
-            return
-
-        # Get user's tasks for context
+        # Get user's tasks for context (included in system prompt)
         try:
-            tasks = db.exec(select(Task).where(Task.user_id == user_id).limit(10)).all()
+            tasks = db.exec(
+                select(Task).where(Task.user_id == user_id).limit(10)
+            ).all()
             task_context = ""
             if tasks:
                 task_context = "\n\nRecent tasks:\n" + "\n".join([
@@ -132,167 +329,80 @@ class TodoChatKitServer(ChatKitServer[dict]):
             logger.exception(f"[ChatKitServer] Error loading tasks")
             task_context = ""
 
-        # Build messages for OpenAI
-        messages = [
-            {
-                "role": "system",
-                "content": f"""You are a helpful todo management assistant. You help users manage their tasks through natural language.
+        # Update agent instructions with user-specific context
+        enhanced_instructions = f"""User: {user.email} (ID: {user_id})
+{task_context}
 
-The user's ID is: {user_id}{task_context}
+Original instructions remain unchanged."""
 
-Available tools you can use:
-1. add_task(title: str, description: str = None) - Add a new task
-2. list_tasks(status: str = None) - List all tasks or filter by status
-3. update_task(task_id: str, title: str = None, description: str = None, status: str = None) - Update a task
-4. complete_task(task_id: str) - Mark a task as completed
-5. delete_task(task_id: str) - Delete a task
+        # Create request context dict for MCP tools (contains user_id and db)
+        # This will be passed to Runner.run_streamed() and wrapped in ToolContext
+        request_context_for_runner = {
+            "user_id": user_id,
+            "email": user.email,
+            "db": db
+        }
 
-When you need to use a tool, respond with a tool call in this format:
-TOOL:<tool_name>:<json_parameters>
-
-After executing a tool, report the result to the user in a friendly way.
-
-Always be concise and helpful."""
-            }
-        ]
-
-        messages.append({"role": "user", "content": user_message})
-
-        # Call OpenAI API
-        response = self.openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            tools=[
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "add_task",
-                        "description": "Add a new task to the user's todo list",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "title": {"type": "string", "description": "The task title"},
-                                "description": {"type": "string", "description": "Optional description"}
-                            },
-                            "required": ["title"]
-                        }
-                    }
-                },
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "list_tasks",
-                        "description": "List all tasks or filter by status",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "status": {"type": "string", "enum": ["pending", "completed", "all"]}
-                            }
-                        }
-                    }
-                },
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "complete_task",
-                        "description": "Mark a task as completed",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "task_id": {"type": "string"}
-                            },
-                            "required": ["task_id"]
-                        }
-                    }
-                },
-            ],
-            tool_choice="auto"
+        # Create AgentContext for stream_agent_response()
+        # This connects the ChatKit thread with the ChatKit event streaming
+        agent_context_for_streaming = AgentContext(
+            thread=thread,
+            store=self.store,
+            request_context=request_context_for_runner,
         )
 
-        assistant_message = response.choices[0].message
-        tool_calls = assistant_message.tool_calls
+        try:
+            # Run the agent using OpenAI Agents SDK with streaming
+            # Runner.run_streamed() returns RunResultStreaming for real-time streaming
+            # Note: run_streamed() is NOT async - it's a synchronous function
+            logger.info(f"[ChatKitServer] Running agent for user {user.email}")
 
-        final_response = ""
+            try:
+                result = Runner.run_streamed(
+                    self.agent,
+                    input=user_message,
+                    context=request_context_for_runner  # Pass dict, not AgentContext
+                )
+                logger.info(f"[ChatKitServer] Agent run completed successfully, got result type: {type(result)}")
+            except Exception as agent_error:
+                logger.exception(f"[ChatKitServer] Agent execution failed: {agent_error}")
+                raise
 
-        # Execute tool calls
-        if tool_calls:
-            for tool_call in tool_calls:
-                function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
+            # Stream ChatKit events from the agent result
+            # stream_agent_response() converts RunResultStreaming to ThreadStreamEvent
+            logger.info(f"[ChatKitServer] Starting to stream events from stream_agent_response()")
+            event_count = 0
+            try:
+                async for event in stream_agent_response(
+                    context=agent_context_for_streaming,  # Pass AgentContext here
+                    result=result
+                ):
+                    event_count += 1
+                    logger.debug(f"[ChatKitServer] Yielding event {event_count}: {type(event)}")
+                    yield event
 
-                try:
-                    if function_name == "add_task":
-                        new_task = Task(
-                            title=function_args.get("title", "Untitled"),
-                            description=function_args.get("description", ""),
-                            user_id=user_id,
-                            status="pending"
-                        )
-                        db.add(new_task)
-                        db.commit()
-                        db.refresh(new_task)
-                        result = f"✅ Added task: {new_task.title}"
+                logger.info(f"[ChatKitServer] Completed streaming {event_count} events for thread {thread.id}")
+            except Exception as stream_error:
+                logger.exception(f"[ChatKitServer] Error streaming events: {stream_error}")
+                raise
 
-                    elif function_name == "list_tasks":
-                        status_filter = function_args.get("status")
-                        statement = select(Task).where(Task.user_id == user_id)
-                        if status_filter and status_filter != "all":
-                            statement = statement.where(Task.status == status_filter)
-                        tasks = db.exec(statement).all()
-
-                        if tasks:
-                            task_list = "\n".join([f"• {t.title} ({t.status})" for t in tasks])
-                            result = f"📋 Your tasks:\n{task_list}"
-                        else:
-                            result = "📋 No tasks found"
-
-                    elif function_name == "complete_task":
-                        task_id = function_args.get("task_id")
-                        task = db.get(Task, task_id)
-                        if task and task.user_id == user_id:
-                            task.status = "completed"
-                            db.commit()
-                            result = f"✅ Completed task: {task.title}"
-                        else:
-                            result = "❌ Task not found"
-
-                    else:
-                        result = f"❓ Unknown tool: {function_name}"
-
-                except Exception as e:
-                    logger.exception(f"[ChatKitServer] Error executing {function_name}")
-                    result = f"❌ Error: {str(e)}"
-
-                final_response = result
-
-        else:
-            final_response = assistant_message.content or "I understand. How can I help you with your tasks?"
-
-        # Yield the assistant message
-        assistant_id = self.store.generate_item_id("msg", thread, context)
-        yield ThreadItemDoneEvent(
-            item=AssistantMessageItem(
-                id=assistant_id,
-                thread_id=thread.id,
-                created_at=utc_now(),
-                content=[
-                    AssistantMessageContent(
-                        type="output_text",
-                        text=final_response,
-                        annotations=[]
-                    )
-                ],
+        except Exception as e:
+            logger.exception(f"[ChatKitServer] Error in agent execution: {e}")
+            from chatkit.types import ErrorEvent, ErrorCode
+            yield ErrorEvent(
+                code=ErrorCode.STREAM_ERROR,
+                message=f"Error processing your request: {str(e)}",
+                allow_retry=True
             )
+
+    def _get_greeting_message(self) -> str:
+        """Get the greeting message for new conversations."""
+        return (
+            "Hi! 👋 I'm your Todo AI Assistant. I can help you:\n\n"
+            "• ✅ Add a new task\n"
+            "• 📋 Show your tasks\n"
+            "• ✏️ Update a task\n"
+            "• ✅ Mark a task complete\n"
+            "• 🗑️ Delete a task\n\n"
+            "What would you like to do?"
         )
-
-        logger.info(f"[ChatKitServer] Completed response for thread {thread.id}")
-
-    def _error_event(self, message: str) -> ThreadStreamEvent:
-        """Create an error event."""
-        from chatkit.types import ErrorEvent, ErrorCode
-        return ErrorEvent(
-            code=ErrorCode.STREAM_ERROR,
-            message=message,
-            allow_retry=False
-        )
-
