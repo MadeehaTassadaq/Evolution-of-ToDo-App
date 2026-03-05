@@ -10,7 +10,15 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from chatkit.store import Store
-from chatkit.types import ThreadMetadata, ThreadItem
+from chatkit.types import (
+    ThreadMetadata,
+    ThreadItem,
+    UserMessageItem,
+    AssistantMessageItem,
+    UserMessageContent,
+    AssistantMessageContent,
+    Page
+)
 
 from ..models.conversation import Conversation
 from ..models.message import Message
@@ -40,7 +48,7 @@ class Phase2ChatKitStore(Store[Dict[str, Any]]):
         """Generate a unique item ID."""
         return str(uuid4())
 
-    def load_thread(self, thread_id: str, context: Optional[Dict[str, Any]] = None) -> Optional[ThreadMetadata]:
+    async def load_thread(self, thread_id: str, context: Optional[Dict[str, Any]] = None) -> Optional[ThreadMetadata]:
         """
         Load thread metadata from database.
 
@@ -84,11 +92,12 @@ class Phase2ChatKitStore(Store[Dict[str, Any]]):
             logger.exception(f"[Phase2ChatKitStore] Error loading thread: {e}")
             return None
 
-    def load_threads(
+    async def load_threads(
         self,
         limit: int = 100,
         offset: int = 0,
         order: str = "desc",
+        after: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None
     ) -> List[ThreadMetadata]:
         """
@@ -98,6 +107,7 @@ class Phase2ChatKitStore(Store[Dict[str, Any]]):
             limit: Maximum number of threads to return
             offset: Number of threads to skip
             order: Sort order ("desc" or "asc")
+            after: Thread ID to start after (for cursor-based pagination)
             context: Request context containing user_id and db session
 
         Returns:
@@ -119,6 +129,22 @@ class Phase2ChatKitStore(Store[Dict[str, Any]]):
                 statement = select(Conversation).where(Conversation.user_id == user_id)
             else:
                 statement = select(Conversation)
+
+            # Handle cursor-based pagination with 'after' parameter
+            if after:
+                try:
+                    after_uuid = UUID(after)
+                    # Get the reference conversation to compare timestamps
+                    ref_conv = db.get(Conversation, after_uuid)
+                    if ref_conv:
+                        if order == "desc":
+                            # For desc order, get threads updated before the reference
+                            statement = statement.where(Conversation.updated_at < ref_conv.updated_at)
+                        else:
+                            # For asc order, get threads updated after the reference
+                            statement = statement.where(Conversation.updated_at > ref_conv.updated_at)
+                except ValueError:
+                    logger.warning(f"[Phase2ChatKitStore] Invalid 'after' thread ID: {after}")
 
             if order == "desc":
                 statement = statement.order_by(Conversation.updated_at.desc())
@@ -143,7 +169,7 @@ class Phase2ChatKitStore(Store[Dict[str, Any]]):
             logger.exception(f"[Phase2ChatKitStore] Error loading threads: {e}")
             return []
 
-    def save_thread(self, thread: ThreadMetadata, context: Optional[Dict[str, Any]] = None) -> ThreadMetadata:
+    async def save_thread(self, thread: ThreadMetadata, context: Optional[Dict[str, Any]] = None) -> ThreadMetadata:
         """
         Save or update thread metadata.
 
@@ -197,13 +223,14 @@ class Phase2ChatKitStore(Store[Dict[str, Any]]):
             logger.exception(f"[Phase2ChatKitStore] Error saving thread: {e}")
             return thread
 
-    def load_thread_items(
+    async def load_thread_items(
         self,
         thread_id: str,
         limit: int = 100,
         order: str = "asc",
+        after: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None
-    ) -> List:
+    ) -> "Page[ThreadItem]":
         """
         Load items for a thread.
 
@@ -211,40 +238,83 @@ class Phase2ChatKitStore(Store[Dict[str, Any]]):
             thread_id: The thread ID
             limit: Maximum number of items to return
             order: Sort order ("asc" or "desc")
+            after: Message ID to start after (for cursor-based pagination)
             context: Request context containing db session
 
         Returns:
-            List of thread items
+            Page object with 'items' list and 'has_more' boolean for pagination
         """
+        from chatkit.types import UserMessageItem, AssistantMessageItem, UserMessageContent, AssistantMessageContent
+
         db = context.get("db") if context else None
         if not db:
-            return []
+            return Page(items=[], has_more=False)
 
         try:
             statement = select(Message).where(Message.conversation_id == UUID(thread_id))
+
+            # Handle cursor-based pagination with 'after' parameter
+            if after:
+                try:
+                    after_uuid = UUID(after)
+                    # Get the reference message to compare timestamps
+                    ref_msg = db.get(Message, after_uuid)
+                    if ref_msg:
+                        if order == "desc":
+                            # For desc order, get messages before the reference
+                            statement = statement.where(Message.timestamp < ref_msg.timestamp)
+                        else:
+                            # For asc order, get messages after the reference
+                            statement = statement.where(Message.timestamp > ref_msg.timestamp)
+                except ValueError:
+                    logger.warning(f"[Phase2ChatKitStore] Invalid 'after' message ID: {after}")
+
             if order == "desc":
                 statement = statement.order_by(Message.timestamp.desc())
             else:
                 statement = statement.order_by(Message.timestamp.asc())
-            statement = statement.limit(limit)
+            statement = statement.limit(limit + 1)  # Fetch one extra to determine has_more
             messages = db.exec(statement).all()
 
             # Convert to ChatKit format
             items = []
-            for msg in messages:
-                items.append({
-                    "id": str(msg.id),
-                    "thread_id": thread_id,
-                    "role": msg.role,
-                    "content": [{"type": "text", "text": msg.content}],
-                    "created_at": msg.timestamp,
-                })
-            return items
+            for msg in messages[:limit]:  # Only return up to limit items
+                if msg.role == "user":
+                    items.append(UserMessageItem(
+                        id=str(msg.id),
+                        thread_id=thread_id,
+                        created_at=msg.timestamp or utc_now(),
+                        content=[
+                            UserMessageContent(
+                                type="input_text",
+                                text=msg.content
+                            )
+                        ]
+                    ))
+                else:  # assistant
+                    items.append(AssistantMessageItem(
+                        id=str(msg.id),
+                        thread_id=thread_id,
+                        created_at=msg.timestamp or utc_now(),
+                        content=[
+                            AssistantMessageContent(
+                                type="output_text",
+                                text=msg.content,
+                                annotations=[]
+                            )
+                        ]
+                    ))
+
+            # Check if there are more items
+            has_more = len(messages) > limit
+
+            # Return a Page object with items and has_more
+            return Page(items=items, has_more=has_more)
         except Exception as e:
             logger.exception(f"[Phase2ChatKitStore] Error loading thread items: {e}")
-            return []
+            return Page(items=[], has_more=False)
 
-    def add_thread_item(self, item: Any, context: Optional[Dict[str, Any]] = None) -> Any:
+    async def add_thread_item(self, item: Any, context: Optional[Dict[str, Any]] = None) -> Any:
         """
         Add an item to a thread.
 
@@ -294,23 +364,23 @@ class Phase2ChatKitStore(Store[Dict[str, Any]]):
             return item
 
     # Minimal implementations for other required methods
-    def load_item(self, item_id: str, context: Optional[Dict[str, Any]] = None) -> Optional:
+    async def load_item(self, item_id: str, context: Optional[Dict[str, Any]] = None) -> Optional[ThreadItem]:
         return None
 
-    def save_item(self, item: Any, context: Optional[Dict[str, Any]] = None) -> Any:
+    async def save_item(self, item: Any, context: Optional[Dict[str, Any]] = None) -> Any:
         return item
 
-    def delete_thread_item(self, thread_id: str, item_id: str, context: Optional[Dict[str, Any]] = None) -> bool:
+    async def delete_thread_item(self, thread_id: str, item_id: str, context: Optional[Dict[str, Any]] = None) -> bool:
         return False
 
-    def delete_thread(self, thread_id: str, context: Optional[Dict[str, Any]] = None) -> bool:
+    async def delete_thread(self, thread_id: str, context: Optional[Dict[str, Any]] = None) -> bool:
         return False
 
-    def load_attachment(self, attachment_id: str, context: Optional[Dict[str, Any]] = None) -> Optional:
+    async def load_attachment(self, attachment_id: str, context: Optional[Dict[str, Any]] = None) -> Optional[Any]:
         return None
 
-    def save_attachment(self, attachment: Any, context: Optional[Dict[str, Any]] = None) -> Any:
+    async def save_attachment(self, attachment: Any, context: Optional[Dict[str, Any]] = None) -> Any:
         return attachment
 
-    def delete_attachment(self, attachment_id: str, context: Optional[Dict[str, Any]] = None) -> bool:
+    async def delete_attachment(self, attachment_id: str, context: Optional[Dict[str, Any]] = None) -> bool:
         return False
