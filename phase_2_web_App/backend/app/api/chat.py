@@ -67,6 +67,7 @@ def utc_now():
 # ============================================================================
 
 @router.post("/chatkit")
+@router.get("/chatkit")
 async def chatkit_streaming_endpoint(
     request: Request,
     current_user: dict = Depends(get_current_user_from_request),
@@ -77,10 +78,20 @@ async def chatkit_streaming_endpoint(
 
     Compatible with @openai/chatkit-react widget.
 
+    Supports both POST and GET methods:
+    - POST: For chat messages with SSE streaming
+    - GET: For thread history and metadata requests
+
     Authentication:
     - Authorization: Bearer <token> header (standard)
     - ?token=<token> query parameter (for ChatKit widget)
     """
+    logger.info(f"[ChatKit] ================================================")
+    logger.info(f"[ChatKit] {request.method} {request.url.path}")
+    logger.info(f"[ChatKit] Query params: {dict(request.query_params)}")
+    logger.info(f"[ChatKit] Headers: {dict(request.headers)}")
+    logger.info(f"[ChatKit] User: {current_user.get('email')}")
+    logger.info(f"[ChatKit] ================================================")
     try:
         user_id = current_user.get("id")
         if not user_id:
@@ -103,14 +114,68 @@ async def chatkit_streaming_endpoint(
         # Read request body
         request_body = await request.body()
         content_type = request.headers.get("content-type", "")
-        logger.info(f"[ChatKit] Request - Content-Type: {content_type}, Method: {request.method}")
+
+        logger.info(f"[ChatKit] Request - Content-Type: {content_type}")
         logger.info(f"[ChatKit] Request body length: {len(request_body)} bytes")
+
         if len(request_body) > 0:
             try:
                 body_json = json.loads(request_body)
                 logger.info(f"[ChatKit] Request body JSON: {json.dumps(body_json, indent=2)}")
             except:
                 logger.info(f"[ChatKit] Request body preview: {request_body[:500]}...")
+
+        # Protocol translation: Handle old ChatKit widget format (v1.5.x) vs new SDK format (v1.6.x)
+        # Old widget sends: {"type": "user_message", "item": {"id": "...", "thread_id": "...", "content": [...]}}
+        # New SDK expects: {"type": "threads.add_user_message", "params": {"input": {...}, "thread_id": "..."}}
+        if len(request_body) > 0:
+            try:
+                body_json = json.loads(request_body)
+                request_type = body_json.get("type", "")
+
+                # Translate old protocol to new protocol
+                if request_type == "user_message":
+                    logger.info(f"[ChatKit] Translating old protocol 'user_message' to 'threads.add_user_message'")
+                    # Extract fields from the old format
+                    item = body_json.get("item", {})
+                    thread_id = item.get("thread_id")
+                    content = item.get("content")
+
+                    # Create new format with correct structure including required fields
+                    translated_request = {
+                        "type": "threads.add_user_message",
+                        "params": {
+                            "input": {
+                                "content": content,
+                                "attachments": [],  # Required by new SDK
+                                "inference_options": {}  # Required by new SDK
+                            },
+                            "thread_id": thread_id
+                        }
+                    }
+                    request_body = json.dumps(translated_request).encode('utf-8')
+                    logger.info(f"[ChatKit] Translated request body: {json.dumps(translated_request, indent=2)}")
+
+                logger.info(f"[ChatKit] Request body JSON: {json.dumps(body_json, indent=2)}")
+            except:
+                logger.info(f"[ChatKit] Request body preview: {request_body[:500]}...")
+
+        # For GET requests with no body, create empty protocol request
+        if request.method == "GET" and len(request_body) == 0:
+            # Check if this is a threads list request
+            if request.query_params.get("type") == "threads.list":
+                threads_list_request = {
+                    "type": "threads.list",
+                    "params": {
+                        "limit": int(request.query_params.get("limit", 20)),
+                        "order": request.query_params.get("order", "desc")
+                    }
+                }
+                request_body = json.dumps(threads_list_request).encode('utf-8')
+                logger.info(f"[ChatKit] Converted GET request to: {json.dumps(threads_list_request)}")
+            else:
+                # Empty body for GET requests
+                request_body = b'{}'
 
         # Build context for ChatKit server
         context = {

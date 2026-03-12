@@ -1,4 +1,21 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Determine API base URL based on environment
+const getApiBaseUrl = () => {
+  if (typeof window === 'undefined') return 'http://localhost:8000';
+
+  const hostname = window.location.hostname;
+  const port = window.location.port;
+
+  // Running on Kubernetes NodePort (localhost:30080)
+  // Backend is exposed on NodePort 30880
+  if (port === '30080' || port === '30081') {
+    return `${window.location.protocol}//${hostname}:30880`;
+  }
+
+  // Local development
+  return 'http://localhost:8000';
+};
+
+const API_BASE = getApiBaseUrl();
 
 export async function apiFetch(
   url: string,

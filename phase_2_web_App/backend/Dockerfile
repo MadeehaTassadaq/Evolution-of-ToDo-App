@@ -23,7 +23,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy the application code
 COPY app/ ./app/
-COPY app.py .
+COPY alembic/ ./alembic/
+COPY alembic.ini .
 
 # Expose the port
 EXPOSE $PORT
@@ -34,4 +35,4 @@ RUN adduser --disabled-password --gecos '' appuser && \
 USER appuser
 
 # Start the application
-CMD ["sh", "-c", "python app.py"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port $PORT"]

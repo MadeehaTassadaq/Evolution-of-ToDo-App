@@ -46,10 +46,9 @@ const ChatKitWidgetOfficial: React.FC = () => {
   const loadChatKit = async () => {
     try {
       // Load the official ChatKit React components
-      const { OpenAIChatProvider, useChatKit } = await import('@openai/chatkit-react');
-
-      // We'll render this in a portal or separate component
-      console.log('[ChatKit] Official library loaded');
+      // @ts-ignore - Library exports may have changed
+      const chatkitModule = await import('@openai/chatkit-react');
+      console.log('[ChatKit] Official library loaded:', Object.keys(chatkitModule));
     } catch (error) {
       console.error('[ChatKit] Failed to load official library:', error);
     }

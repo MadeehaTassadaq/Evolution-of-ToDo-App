@@ -63,14 +63,13 @@ const ChatKitWidgetFixed: React.FC<ChatKitWidgetProps> = ({ className = '' }) =>
       },
       theme: {
         colorScheme: 'dark',
-        radius: 'medium',
+        radius: 'soft',
         color: {
           accent: { primary: '#10B981', level: 2 }, // Emerald color
         },
       },
       header: {
         enabled: true,
-        title: 'Todo AI Assistant',
       },
       history: {
         enabled: false, // Hide thread history for simplicity

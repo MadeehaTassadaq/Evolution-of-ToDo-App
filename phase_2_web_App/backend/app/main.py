@@ -46,6 +46,8 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3001",
+        "http://localhost:30080",  # Kubernetes NodePort
+        "http://127.0.0.1:30080",  # Kubernetes NodePort
         "http://localhost:7860",  # Phase III chatbot backend
         "http://127.0.0.1:7860",  # Phase III chatbot backend
         "https://madeeha123-chatbot.hf.space",
@@ -68,3 +70,7 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+@app.get("/api/health")
+def health_check_api():
+    return {"status": "healthy", "service": "backend"}

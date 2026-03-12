@@ -13,6 +13,9 @@ out
 .env.local
 .env*.local
 
+# Kubernetes secrets (should never be in Docker image)
+k8s/*secret*.yaml
+
 # IDE
 .vscode
 .idea
@@ -33,4 +36,15 @@ coverage
 build.sh
 README.md
 vercel.json
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Test files
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+coverage/
 

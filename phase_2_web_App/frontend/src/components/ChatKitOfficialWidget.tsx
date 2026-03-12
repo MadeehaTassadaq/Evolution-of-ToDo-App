@@ -49,17 +49,23 @@ import { ChatKit, useChatKit } from '@openai/chatkit-react';
 // ENVIRONMENT CONFIGURATION
 // ============================================================================
 
-// Custom ChatKit backend URL (FastAPI + ChatKit Python SDK)
-// This is our custom backend - NOT OpenAI's hosted service
-// For local: http://localhost:7860
-// For Hugging Face Spaces: https://madeeha123-fastapi.hf.space (configured in Vercel)
-// Use Phase II backend URL instead of Phase III
-const CHATKIT_BACKEND_URL = process.env.NEXT_PUBLIC_CHATBOT_API_URL || 'http://localhost:8000';
+/**
+ * ChatKit Backend URL Configuration
+ * 
+ * Uses a relative URL to proxy requests through the Next.js frontend.
+ * This allows Kubernetes internal DNS names (backend-service) to work
+ * because the frontend server resolves them, not the browser.
+ * 
+ * Architecture:
+ *   Browser → /api/v1/chatkit (relative) → Frontend Proxy → backend-service:8000
+ */
+const CHATKIT_BACKEND_URL = '/api/v1/chatkit';
 
 // Helper to get auth token and build URL with query parameter
 const getChatKitApiUrl = (): string => {
   const token = getToken();
-  const baseUrl = `${CHATKIT_BACKEND_URL}/api/v1/chatkit`;
+  // Use relative URL - frontend will proxy to backend
+  const baseUrl = CHATKIT_BACKEND_URL;
   if (token) {
     return `${baseUrl}?token=${encodeURIComponent(token)}`;
   }
@@ -77,8 +83,8 @@ const isLocalhost = typeof window !== 'undefined' && (
 // For local development, you can either:
 // 1. Use a test domain key that includes localhost
 // 2. Skip domain validation (not recommended for production)
-const CHATKIT_DOMAIN_KEY = process.env.NEXT_PUBLIC_OPENAI_DOMAIN_KEY || (
-  isLocalhost ? undefined : 'domain_pk_696a62eeaf508197aedf5220ff381cc906aff41e18fc2ffc'
+const CHATKIT_DOMAIN_KEY: string = process.env.NEXT_PUBLIC_OPENAI_DOMAIN_KEY || (
+  isLocalhost ? '' : 'domain_pk_696a62eeaf508197aedf5220ff381cc906aff41e18fc2ffc'
 );
 
 // ============================================================================
@@ -140,6 +146,11 @@ function ChatKitAuthenticatedWidget() {
       domainKey: CHATKIT_DOMAIN_KEY,
     },
 
+    // Enable thread history
+    history: {
+      enabled: true,
+    },
+
     // Trigger task list refresh after assistant responses
     onResponseEnd: async () => {
       console.log('[ChatKit Widget] Response ended, triggering task list refresh...');
@@ -147,6 +158,11 @@ function ChatKitAuthenticatedWidget() {
       window.dispatchEvent(new CustomEvent('chatkit-operation-complete', {
         detail: { timestamp: Date.now() }
       }));
+    },
+
+    // Log when threads are loaded
+    onThreadLoadEnd: async () => {
+      console.log('[ChatKit Widget] Threads loaded');
     },
 
     // Client Tool Handler - NOT NEEDED with custom backend
