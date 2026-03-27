@@ -1,22 +1,22 @@
 'use client';
 
 /**
- * Official OpenAI ChatKit Widget - Hosted Backend with Client Tools
+ * Official OpenAI ChatKit Widget - Custom Backend with ChatKit Python SDK
  *
- * This uses the official @openai/chatkit-react package with OpenAI's HOSTED backend.
- * Custom tool execution is handled via onClientTool callback to our FastAPI backend.
+ * This uses the official @openai/chatkit-react package with a CUSTOM backend
+ * running the ChatKit Python SDK (deployed on Hugging Face Spaces).
  *
  * =============================================================================
  * ARCHITECTURE:
  * =============================================================================
  *
  * Frontend (ChatKit Widget)
- *     ↓ HTTPS (OpenAI Hosted)
- * OpenAI ChatKit Service (api.openai.com/chatkit/v1)
- *     ↓ onClientTool callback
- * Custom Backend (FastAPI @ http://localhost:7860/api/v1/tools/execute)
+ *     ↓ HTTPS/WSS
+ * Custom Backend (FastAPI + ChatKit Python SDK @ Hugging Face Spaces)
  *     ↓
- * PostgreSQL Database (via TodoTools service)
+ * OpenAI Agents SDK (AI processing + Tool execution)
+ *     ↓
+ * PostgreSQL Database (via Neon)
  *
  * =============================================================================
  * ENVIRONMENT SETUP:
@@ -24,39 +24,21 @@
  *
  * Set in phase_2_web_App/frontend/.env.local:
  *
- * # ChatKit backend URL (for tool execution only)
+ * # ChatKit Custom Backend URL (Hugging Face Spaces)
+ * # Local development: http://localhost:7860
+ * # Production: https://your-space-name.hf.space
  * NEXT_PUBLIC_CHATKIT_BACKEND_URL=http://localhost:7860
  *
- * # OpenAI Domain Key (registered for madeehatassadaq.github.io)
- * NEXT_PUBLIC_OPENAI_DOMAIN_KEY=domain_pk_699dd137050c8194b8ac6b936da88aa408d6ecf59a4d7a47
- *
  * =============================================================================
- * IMPORTANT: BOTH BACKENDS MUST BE RUNNING:
+ * DEPLOYMENT:
  * =============================================================================
  *
- * Terminal 1: Phase II Todo Backend (port 8000)
- *   cd phase_2_web_App/backend && python app.py
+ * For Vercel deployment:
+ * 1. Deploy backend to Hugging Face Spaces
+ * 2. Set NEXT_PUBLIC_CHATKIT_BACKEND_URL to your Hugging Face Space URL
+ * 3. NO domain key needed (custom backend handles authentication)
  *
- * Terminal 2: Phase III ChatBot Backend (port 7860)
- *   cd phase_3_chatbot/backend && python main.py
- *
- * Terminal 3: Frontend (port 3000/3001)
- *   cd phase_2_web_App/frontend && npm run dev
- *
- * =============================================================================
- * HOW IT WORKS:
- * =============================================================================
- *
- * 1. User types message in ChatKit widget
- * 2. Widget sends request to OpenAI's hosted ChatKit service
- * 3. OpenAI processes with AI and determines if tools are needed
- * 4. If tools needed, widget's onClientTool is called
- * 5. onClientTool calls our backend at /api/v1/tools/execute
- * 6. Backend executes tool and returns result
- * 7. Result sent back to OpenAI to format response
- * 8. User sees final response in widget
- *
- * @see https://openai.github.io/chatkit-js/
+ * @see https://github.com/openai/chatkit-python
  */
 
 import { useState, useEffect } from 'react';
@@ -67,15 +49,43 @@ import { ChatKit, useChatKit } from '@openai/chatkit-react';
 // ENVIRONMENT CONFIGURATION
 // ============================================================================
 
-// Custom ChatKit backend URL (FastAPI + ChatKit Python SDK)
-// This is our custom backend - NOT OpenAI's hosted service
-const CHATKIT_BACKEND_URL = process.env.NEXT_PUBLIC_CHATKIT_BACKEND_URL || 'http://localhost:7860';
+/**
+ * ChatKit Backend URL Configuration
+ * 
+ * Uses a relative URL to proxy requests through the Next.js frontend.
+ * This allows Kubernetes internal DNS names (backend-service) to work
+ * because the frontend server resolves them, not the browser.
+ * 
+ * Architecture:
+ *   Browser → /api/v1/chatkit (relative) → Frontend Proxy → backend-service:8000
+ */
+const CHATKIT_BACKEND_URL = '/api/v1/chatkit';
 
-// Full API URL for the ChatKit endpoint
-const CHATKIT_API_URL = `${CHATKIT_BACKEND_URL}/api/v1/chatkit`;
+// Helper to get auth token and build URL with query parameter
+const getChatKitApiUrl = (): string => {
+  const token = getToken();
+  // Use relative URL - frontend will proxy to backend
+  const baseUrl = CHATKIT_BACKEND_URL;
+  if (token) {
+    return `${baseUrl}?token=${encodeURIComponent(token)}`;
+  }
+  return baseUrl;
+};
 
-// OpenAI Domain Key (registered for madeehatassadaq.github.io)
-const CHATKIT_DOMAIN_KEY = process.env.NEXT_PUBLIC_OPENAI_DOMAIN_KEY || 'domain_pk_699dd137050c8194b8ac6b936da88aa408d6ecf59a4d7a47';
+// Domain Key for ChatKit widget (required for domain validation)
+// For local development, we may need to skip domain validation or use a test key
+// For production: Use your registered domain key
+const isLocalhost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1'
+);
+
+// For local development, you can either:
+// 1. Use a test domain key that includes localhost
+// 2. Skip domain validation (not recommended for production)
+const CHATKIT_DOMAIN_KEY: string = process.env.NEXT_PUBLIC_OPENAI_DOMAIN_KEY || (
+  isLocalhost ? '' : 'domain_pk_696a62eeaf508197aedf5220ff381cc906aff41e18fc2ffc'
+);
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -99,25 +109,65 @@ const getInitialThreadId = (): string | null => {
  * Inner component that only renders when authenticated
  */
 function ChatKitAuthenticatedWidget() {
+  const [isWidgetOpen, setIsWidgetOpen] = useState(false);
+
   useEffect(() => {
     console.log('[ChatKit Widget] ================================================');
-    console.log('[ChatKit Widget] Using OpenAI-Hosted Backend with Client Tools');
-    console.log('[ChatKit Widget] Tool Execution Backend:', CHATKIT_BACKEND_URL);
+    console.log('[ChatKit Widget] Using Custom Backend (ChatKit Python SDK)');
+    console.log('[ChatKit Widget] Backend URL:', getChatKitApiUrl());
     console.log('[ChatKit Widget] Auth Token:', !!getToken());
     console.log('[ChatKit Widget] Current URL:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
+    console.log('[ChatKit Widget] Domain Key:', CHATKIT_DOMAIN_KEY?.substring(0, 20) + '...' || 'None (local development)');
     console.log('[ChatKit Widget] ================================================');
+
+    // Test backend connection
+    const testBackendConnection = async () => {
+      try {
+        const response = await fetch(`${CHATKIT_BACKEND_URL}/health`);
+        if (response.ok) {
+          console.log('[ChatKit Widget] ✅ Backend is reachable!');
+        } else {
+          console.warn('[ChatKit Widget] ⚠️ Backend returned non-OK status:', response.status);
+        }
+      } catch (error) {
+        console.error('[ChatKit Widget] ❌ Backend is NOT reachable:', error);
+      }
+    };
+
+    testBackendConnection();
   }, []);
 
   const chatKit = useChatKit({
-    // OpenAI-Hosted Backend Configuration
-    // This uses OpenAI's hosted ChatKit service, which handles domain validation
-    // Our custom backend is called via onClientTool for tool execution
+    // Custom Backend Configuration (ChatKit Python SDK on Hugging Face Spaces)
+    // This uses our custom backend running the ChatKit Python SDK
+    // The backend handles AI processing and tool execution server-side
     api: {
-      url: "https://api.openai.com/chatkit/v1",
+      url: getChatKitApiUrl(), // Dynamic URL with auth token as query parameter
       domainKey: CHATKIT_DOMAIN_KEY,
     },
 
-    // Client Tool Handler - calls our custom backend for tool execution
+    // Enable thread history
+    history: {
+      enabled: true,
+    },
+
+    // Trigger task list refresh after assistant responses
+    onResponseEnd: async () => {
+      console.log('[ChatKit Widget] Response ended, triggering task list refresh...');
+      // Dispatch custom event to notify task list component
+      window.dispatchEvent(new CustomEvent('chatkit-operation-complete', {
+        detail: { timestamp: Date.now() }
+      }));
+    },
+
+    // Log when threads are loaded
+    onThreadLoadEnd: async () => {
+      console.log('[ChatKit Widget] Threads loaded');
+    },
+
+    // Client Tool Handler - NOT NEEDED with custom backend
+    // The ChatKit Python SDK backend handles tool execution server-side
+    // Kept for compatibility but won't be called with custom backend
     onClientTool: async (invocation: { name: string; params: Record<string, unknown> }) => {
       console.log('[ChatKit Widget] Client tool invocation:', invocation);
 
@@ -197,26 +247,83 @@ function ChatKitAuthenticatedWidget() {
 
     // Error handler
     onError: ({ error }) => {
-      console.error('[ChatKit Widget] Error:', error);
+      console.error('[ChatKit Widget] ================================================');
+      console.error('[ChatKit Widget] ERROR:', error);
+      console.error('[ChatKit Widget] Error name:', error.name);
+      console.error('[ChatKit Widget] Error message:', error.message);
+      console.error('[ChatKit Widget] Error stack:', error.stack);
+      console.error('[ChatKit Widget] Backend URL:', getChatKitApiUrl());
+      console.error('[ChatKit Widget] Domain Key:', CHATKIT_DOMAIN_KEY?.substring(0, 20) + '...');
+      console.error('[ChatKit Widget] ================================================');
 
       // Check for backend connectivity issues
       if (error.message?.includes('fetch') || error.message?.includes('network')) {
-        console.error('[ChatKit Widget] Cannot connect to tool execution backend at:', CHATKIT_BACKEND_URL);
-        console.error('[ChatKit Widget] Make sure the backend is running: cd phase_3_chatbot/backend && python main.py');
+        console.error('[ChatKit Widget] Cannot connect to ChatKit backend at:', getChatKitApiUrl());
+        console.error('[ChatKit Widget] Make sure the backend is running and accessible');
       }
     },
 
     // Ready handler
     onReady: () => {
-      console.log('[ChatKit Widget] Widget is ready and connected to OpenAI-hosted backend!');
+      console.log('[ChatKit Widget] Widget is ready and connected to custom backend!');
+
+      // Debug: Check if ChatKit element is in DOM
+      setTimeout(() => {
+        const chatkitElements = document.querySelectorAll('openai-chatkit, [data-chatkit], .chatkit-widget');
+        console.log('[ChatKit Widget] Debug - ChatKit elements found:', chatkitElements.length);
+        chatkitElements.forEach((el, i) => {
+          console.log(`[ChatKit Widget] Debug - Element ${i}:`, {
+            tagName: el.tagName,
+            className: el.className,
+            id: el.id,
+            display: window.getComputedStyle(el).display,
+            visibility: window.getComputedStyle(el).visibility,
+            opacity: window.getComputedStyle(el).opacity,
+            zIndex: window.getComputedStyle(el).zIndex,
+          });
+        });
+
+        // Check all fixed positioned elements
+        const fixedElements = Array.from(document.querySelectorAll('*')).filter(
+          el => window.getComputedStyle(el).position === 'fixed'
+        );
+        console.log('[ChatKit Widget] Debug - Fixed positioned elements:', fixedElements.length);
+        const bottomRightElements = fixedElements.filter(el => {
+          const style = window.getComputedStyle(el);
+          return style.bottom.includes('rem') || style.bottom.includes('px');
+        });
+        console.log('[ChatKit Widget] Debug - Bottom-right positioned elements:', bottomRightElements.map(el => ({
+          tagName: el.tagName,
+          className: el.className,
+          bottom: window.getComputedStyle(el).bottom,
+          right: window.getComputedStyle(el).right,
+        })));
+      }, 1000);
     },
   });
 
   // Fixed position widget in bottom-right corner
   return (
-    <div className="fixed bottom-6 right-6 z-[9999]">
-      <ChatKit control={chatKit.control} />
-    </div>
+    <>
+      {/* Floating Chat Button */}
+      <button
+        onClick={() => setIsWidgetOpen(!isWidgetOpen)}
+        className="fixed bottom-6 right-6 z-[9999] w-14 h-14 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+        title={isWidgetOpen ? "Close AI Assistant" : "Open AI Assistant"}
+        style={{
+          boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)',
+        }}
+      >
+        {isWidgetOpen ? '✕' : '🤖'}
+      </button>
+
+      {/* ChatKit Widget Panel (shown when open) */}
+      {isWidgetOpen && (
+        <div className="fixed bottom-24 right-6 z-[9998] w-[400px] max-w-[calc(100vw-3rem)] h-[600px] max-h-[calc(100vh-6rem)]">
+          <ChatKit control={chatKit.control} className="h-full w-full" />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -274,7 +381,19 @@ const ChatKitOfficialWidget: React.FC = () => {
   // Hide on login/register pages
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/chatkit';
 
+  // Debug logging
+  console.log('[ChatKit Widget] Render state:', {
+    pathname,
+    isAuthPage,
+    isInitialized,
+    hasAuthToken: !!authToken,
+    tokenPrefix: authToken ? authToken.substring(0, 20) + '...' : 'none'
+  });
+
   if (isAuthPage || !isInitialized || !authToken) {
+    console.log('[ChatKit Widget] Not showing widget because:', {
+      reason: isAuthPage ? 'auth page' : !isInitialized ? 'not initialized' : 'no auth token'
+    });
     return null;
   }
 

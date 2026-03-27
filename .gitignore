@@ -68,8 +68,20 @@ next-env.d.ts
 .specify/memory/session-state.json
 
 # Secrets and sensitive data
+# Ignore plaintext secrets but allow sealed secrets
+k8s/*-secret.yaml
 k8s/*secrets*.yaml
 k8s/04-secrets.yaml
+k8s/02-secret.yaml
+# But DO allow sealed secrets (they're encrypted and safe for Git)
+!k8s/*sealed-secret*.yaml
+# Template files are safe (contain placeholders only)
+!k8s/*.template.yaml
+
+# Backup files (may contain sensitive data)
+k8s/*backup*.yaml
+sealed-secrets-keys-backup.yaml
+
 *.env.local
 phase_*/backend/.env
 phase_*/backend/.env.local

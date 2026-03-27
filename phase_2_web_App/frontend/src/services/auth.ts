@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use relative paths to go through Next.js rewrites
+// This ensures proper routing in both local dev and Kubernetes environments
 
 export interface RegisterResponse {
   id?: string;
@@ -15,10 +16,11 @@ export interface LoginResponse {
 
 export async function register(email: string, password: string): Promise<RegisterResponse> {
   try {
-    const res = await fetch(`${API_BASE}/api/auth/register`, {
+    // Use relative path - Next.js will proxy to backend via rewrites
+    const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }), // Send password, backend will hash it
+      body: JSON.stringify({ email, password }),
     });
 
     if (!res.ok) {
@@ -36,11 +38,12 @@ export async function register(email: string, password: string): Promise<Registe
 
 export async function login(username: string, password: string): Promise<LoginResponse> {
   try {
+    // Use relative path - Next.js will proxy to backend via rewrites
     const formData = new URLSearchParams();
     formData.append('username', username);
-    formData.append('password', password); // Send the plain password, backend will hash it
+    formData.append('password', password);
 
-    const res = await fetch(`${API_BASE}/api/auth/token`, {
+    const res = await fetch('/api/auth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData.toString(),

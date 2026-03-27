@@ -26,6 +26,8 @@ dependencies = [
     "sqlalchemy>=2.0.45",
     "better-profanity>=0.7.0",
     "openai>=2.24.0",
+    "openai-chatkit>=0.1.0",
+    "alembic>=1.18.4",
 ]
 
 [build-system]

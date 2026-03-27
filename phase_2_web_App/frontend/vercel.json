@@ -1,1 +1,7 @@
-{}
+{
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_OPENAI_DOMAIN_KEY": "domain_pk_696a62eeaf508197aedf5220ff381cc906aff41e18fc2ffc"
+    }
+  }
+}

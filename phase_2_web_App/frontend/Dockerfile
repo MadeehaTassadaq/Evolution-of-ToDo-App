@@ -17,8 +17,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Set environment variables for build
+# IMPORTANT: NEXT_PUBLIC_ variables must be set BEFORE build
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_API_URL=http://backend-service:8000
+ENV NEXT_PUBLIC_CHATBOT_API_URL=http://backend-service:8000
 
 # Build the application
 RUN npm run build

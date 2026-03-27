@@ -85,7 +85,7 @@ export default function DashboardPage() {
         setIsAuthChecked(true);
         await fetchTasks();
 
-        // Set up periodic polling for real-time updates (every 5 seconds)
+        // Set up periodic polling for real-time updates (every 3 seconds)
         if (pollIntervalRef.current) {
           clearInterval(pollIntervalRef.current);
         }
@@ -131,6 +131,17 @@ export default function DashboardPage() {
       checkAuthAndLoadTasks();
     }, 10);
 
+    // Listen for ChatKit operation completion events
+    const handleChatKitOperationComplete = () => {
+      console.log('[Tasks Page] ChatKit operation completed, refreshing tasks...');
+      if (isMounted) {
+        fetchTasks();
+      }
+    };
+
+    // Add event listener for ChatKit operations
+    window.addEventListener('chatkit-operation-complete', handleChatKitOperationComplete);
+
     // Cleanup function
     return () => {
       isMounted = false;
@@ -141,6 +152,9 @@ export default function DashboardPage() {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
+
+      // Remove event listener
+      window.removeEventListener('chatkit-operation-complete', handleChatKitOperationComplete);
     };
   }, [isAuthenticated, userId]); // Add userId to dependencies to reconnect when user changes
 

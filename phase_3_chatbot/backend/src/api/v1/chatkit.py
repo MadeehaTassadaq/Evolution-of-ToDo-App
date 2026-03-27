@@ -2,14 +2,14 @@
 ChatKit API Endpoint
 
 Official ChatKit streaming endpoint using Server-Sent Events (SSE).
-Implements the ChatKit protocol for compatibility with @openai/chatkit-react.
+Custom implementation matching ChatKit protocol for @openai/chatkit-react.
 """
 
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
 
-from services.auth_service import get_current_user
+from services.auth_service import get_current_user, get_current_user_optional
 from services.chatkit_server import chatkit_server
 
 router = APIRouter()
@@ -18,40 +18,45 @@ router = APIRouter()
 @router.post("/chatkit")
 async def chatkit_endpoint(
     request: Request,
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_user_optional)
 ):
     """
     Official ChatKit streaming endpoint.
 
     Handles ChatKit protocol requests and streams responses using Server-Sent Events.
 
-    Expected request format:
-    {
-        "thread_id": "optional-conversation-id",
-        "message": "user message"
-    }
-
     Returns:
         StreamingResponse with text/event-stream content type
     """
+    import sys
+
+    # Get raw request body
+    request_body = await request.body()
+
+    # Extract access token from request for passing to Phase II API
+    # Try Authorization header first, then query parameter, then cookie
+    access_token = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        access_token = auth_header[7:]  # Remove "Bearer " prefix
+    elif "token" in request.query_params:
+        access_token = request.query_params["token"]
+    else:
+        access_token = request.cookies.get("authToken") or request.cookies.get("better-auth-token")
+
+    # Build context from authenticated user and access token
+    context = {
+        "user_id": current_user,
+        "access_token": access_token
+    }
+
+    print(f"[CHATKIT ENDPOINT] Request from {current_user}: {request_body[:200]}", flush=True)
+
+    # Process request through ChatKit server and yield SSE events
     async def event_stream():
-        """Generator function that yields SSE events."""
-        try:
-            # Get raw request body
-            request_body = await request.body()
-
-            # Build context from authenticated user
-            context = {"user_id": current_user}
-
-            # Process request through ChatKit server and yield SSE events
-            async for event in chatkit_server.process_request(request_body, context):
-                yield event
-
-        except Exception as e:
-            # Send error event
-            import json
-            error_data = json.dumps({"error": str(e)})
-            yield f"event: error\ndata: {error_data}\n\n"
+        async for event in chatkit_server.process_request(request_body, context):
+            print(f"[CHATKIT ENDPOINT] Yielding: {event[:150]}", flush=True)
+            yield event
 
     return StreamingResponse(
         event_stream(),
@@ -59,7 +64,7 @@ async def chatkit_endpoint(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Disable nginx buffering
+            "X-Accel-Buffering": "no"
         }
     )
 
@@ -73,6 +78,31 @@ async def chatkit_health_check():
         "server": "TodoChatKitServer",
         "protocol": "SSE"
     }
+
+
+@router.post("/chatkit/test")
+async def chatkit_test_endpoint(
+    request: Request,
+    current_user: str = Depends(get_current_user_optional)
+):
+    """Test endpoint that returns simple SSE events for debugging."""
+
+    async def test_stream():
+        """Simple test stream."""
+        import json
+        yield "event: test\ndata: {\"message\": \"test event 1\"}\n\n"
+        yield "event: test\ndata: {\"message\": \"test event 2\"}\n\n"
+        yield "event: done\ndata: {\"status\": \"complete\"}\n\n"
+
+    return StreamingResponse(
+        test_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @router.get("/chatkit/history")

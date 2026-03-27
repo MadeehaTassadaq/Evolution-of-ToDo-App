@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 import jwt
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import os
@@ -108,7 +108,52 @@ class AuthService:
 auth_service = AuthService()
 
 
-# Dependency to get current user
+# Dependency to get current user (supports Authorization header, cookie, and query param)
+async def get_current_user_optional(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
+) -> str:
+    """
+    Get the current user from the token (supports Authorization header, cookie, and query param).
+
+    Args:
+        request: FastAPI Request object
+        credentials: HTTP authorization credentials (optional)
+
+    Returns:
+        User ID if valid token, raises HTTPException otherwise
+    """
+    token = None
+
+    # Try Authorization header first
+    if credentials:
+        token = credentials.credentials
+    # Try query parameter (for ChatKit widget compatibility)
+    elif "token" in request.query_params:
+        token = request.query_params["token"]
+    # Try to get token from cookie
+    else:
+        token = request.cookies.get("authToken") or request.cookies.get("better-auth-token")
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_data = auth_service.verify_token(token)
+    if token_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return token_data.user_id
+
+
+# Dependency to get current user (Authorization header only)
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     """Dependency to get the current user from the token."""
     return await auth_service.get_current_user(credentials)

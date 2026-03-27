@@ -38,6 +38,16 @@ const nextConfig: NextConfig = {
     const todoApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
     return [
+      // Proxy auth endpoints to backend
+      {
+        source: '/api/auth/:path*',
+        destination: `${todoApiUrl}/api/auth/:path*`,
+      },
+      // Proxy tasks endpoints to backend
+      {
+        source: '/api/tasks/:path*',
+        destination: `${todoApiUrl}/api/tasks/:path*`,
+      },
       // Proxy ChatKit official endpoint to Phase 3 backend
       {
         source: '/api/v1/chatkit',

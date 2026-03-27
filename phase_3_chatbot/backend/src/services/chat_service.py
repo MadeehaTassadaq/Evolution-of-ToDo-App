@@ -46,6 +46,23 @@ class ChatService:
         statement = select(Conversation).where(Conversation.id == conversation_id)
         return self.session.exec(statement).first()
 
+    def get_user_conversations(self, user_id: str) -> List[Conversation]:
+        """
+        Retrieve all conversations for a user.
+
+        Args:
+            user_id: The ID of the user
+
+        Returns:
+            List of Conversation objects
+        """
+        statement = (
+            select(Conversation)
+            .where(Conversation.user_id == user_id)
+            .order_by(Conversation.updated_at.desc())
+        )
+        return list(self.session.exec(statement).all())
+
     def get_or_create_conversation(self, user_id: str, conversation_id: Optional[str] = None) -> Conversation:
         """
         Get an existing conversation or create a new one if conversation_id is not provided.

@@ -176,6 +176,7 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
             ]
 
             # Call the OpenAI API with tools
+            print(f"[TodoAgent] Calling OpenAI API with message: '{user_message}'")
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",  # You can change this to gpt-4 if preferred
                 messages=messages,
@@ -187,6 +188,8 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
             # Extract the response
             response_message = response.choices[0].message
             tool_calls = response_message.tool_calls
+
+            print(f"[TodoAgent] OpenAI response - content: '{response_message.content}', tool_calls: {len(tool_calls) if tool_calls else 0}")
 
             # Prepare the result
             result = {
@@ -221,6 +224,9 @@ Remember: Use this user_id automatically in all tool calls. Never ask the user f
             return result
 
         except Exception as e:
+            print(f"[TodoAgent] ERROR: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {
                 "response": "I'm sorry, I encountered an error processing your request. Please try again.",
                 "tool_calls": [],

@@ -2,12 +2,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from .api import auth, tasks, chat
 from .database import create_db_and_tables
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Log critical environment variables (for debugging)
+logger.info(f"OPENAI_API_KEY set: {bool(os.getenv('OPENAI_API_KEY'))}")
+logger.info(f"DATABASE_URL set: {bool(os.getenv('DATABASE_URL'))}")
+logger.info(f"BETTER_AUTH_SECRET set: {bool(os.getenv('BETTER_AUTH_SECRET'))}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,7 +41,18 @@ app = FastAPI(title="Evolution of ToDo API", version="1.0.0", lifespan=lifespan)
 # Configure CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://madeeha123-chatbot.hf.space", "https://evolution-of-to-do-app-bafm.vercel.app"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:30080",  # Kubernetes NodePort
+        "http://127.0.0.1:30080",  # Kubernetes NodePort
+        "http://localhost:7860",  # Phase III chatbot backend
+        "http://127.0.0.1:7860",  # Phase III chatbot backend
+        "https://madeeha123-chatbot.hf.space",
+        "https://evolution-of-to-do-app-bafm.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -48,3 +70,7 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+@app.get("/api/health")
+def health_check_api():
+    return {"status": "healthy", "service": "backend"}
